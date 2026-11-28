@@ -15,7 +15,7 @@ Make a run with incidents visibly actionable and provide a coherent journey from
 - Structured causal association and failed-input evidence for scheduler/start-time failures.
 - Authoritative incident-health summaries/filtering with existing permission/tenant scope.
 - Shared designer node cues, run list/header visibility, nested incident navigation and clear diagnostic reading.
-- Rebuilt normally composed Studio/Workbench proof, regression protection and exact-head delivery gates.
+- Rebuilt normally composed studio/Workbench proof, regression protection and exact-head delivery gates.
 
 ## Out Of Scope
 

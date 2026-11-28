@@ -10,7 +10,7 @@ using Elsa.Secrets.Features;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Workbench;
 using Elsa.Workflows.Design.Reconciliation.Git;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.KernelHosting;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -23,11 +23,11 @@ public sealed class SecretFeatureSettingTests
 {
     public static TheoryData<Type, string> SecretSettings => new()
     {
-        { typeof(RuntimeEntityFrameworkCoreFeature), nameof(RuntimeEntityFrameworkCoreFeature.RecoveryContinuationSigningKey) },
-        { typeof(RuntimeEntityFrameworkCoreFeature), nameof(RuntimeEntityFrameworkCoreFeature.HierarchyCursorSigningKey) },
-        { typeof(RuntimeEntityFrameworkCoreFeature), nameof(RuntimeEntityFrameworkCoreFeature.ConnectionString) },
-        { typeof(WorkflowsRuntimeApiFeature), nameof(WorkflowsRuntimeApiFeature.WorkflowAlterationPayloadProtectionKeys) },
-        { typeof(WorkflowsRuntimeApiFeature), nameof(WorkflowsRuntimeApiFeature.ActivityExecutionHierarchyCursorSigningKey) },
+        { typeof(RuntimeArtifactsEntityFrameworkCoreFeature), nameof(RuntimeArtifactsEntityFrameworkCoreFeature.RecoveryContinuationSigningKey) },
+        { typeof(RuntimeArtifactsEntityFrameworkCoreFeature), nameof(RuntimeArtifactsEntityFrameworkCoreFeature.ConnectionString) },
+        { typeof(RuntimeWorkflowTestScopeEntityFrameworkCoreFeature), nameof(RuntimeWorkflowTestScopeEntityFrameworkCoreFeature.RecoveryContinuationSigningKey) },
+        { typeof(RuntimeWorkflowTestScopeEntityFrameworkCoreFeature), nameof(RuntimeWorkflowTestScopeEntityFrameworkCoreFeature.ConnectionString) },
+        { typeof(WorkflowsRuntimeKernelHostingFeature), nameof(WorkflowsRuntimeKernelHostingFeature.PostgresConnectionString) },
         { typeof(ActivitiesDesignApiFeature), nameof(ActivitiesDesignApiFeature.DependencyCursorSigningKey) },
         { typeof(AspNetCoreIdentityEntityFrameworkCoreFeature), nameof(AspNetCoreIdentityEntityFrameworkCoreFeature.SeedAdminPassword) },
         { typeof(OpenIddictIdentityFeature), nameof(OpenIddictIdentityFeature.SigningKey) },

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Exercises tools/maps/publish-generated-maps.sh against a scratch repository and bare remote (spec 257):
 # bootstrap, append, superseded, unchanged, a hand commit without the trailer, and no force push.
-# Run by the "Generated maps fresh" job; needs only git and bash.
+# Run by the "Generated maps" job; needs only git and bash.
 set -euo pipefail
 
 script=$(cd "$(dirname "$0")" && pwd)/publish-generated-maps.sh

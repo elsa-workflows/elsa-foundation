@@ -70,7 +70,7 @@ def broken_links(root, relative_path, tracked_paths):
 
 def main():
     root = subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True, capture_output=True, text=True).stdout.strip()
-    pathspecs = [":(glob)**/EXTENSION_POINTS.md", ":(glob)essentials/**/README.md", ":(glob)apps/**/README.md", ":(glob)extensions/**/README.md"]
+    pathspecs = [":(glob)**/EXTENSION_POINTS.md", ":(glob)essentials/**/README.md", ":(glob)server/apps/**/README.md", ":(glob)extensions/**/README.md"]
     if "--all-readmes" in sys.argv:
         pathspecs.append(":(glob)**/README.md")
 

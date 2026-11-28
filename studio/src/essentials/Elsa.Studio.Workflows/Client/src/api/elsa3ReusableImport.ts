@@ -1,0 +1,85 @@
+import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type {
+  Elsa3ReusableImportAnalysisPage,
+  Elsa3ReusableImportReceipt,
+  Elsa3ReusableImportSelectionReadiness,
+  Elsa3ReusableImportUploadResult
+} from "../elsa3ReusableImportTypes";
+
+const root = "migration/elsa3/reusable-activities";
+
+export async function uploadElsa3ReusableCollection(
+  context: StudioEndpointContext,
+  files: readonly File[],
+  signal?: AbortSignal
+) {
+  const body = new FormData();
+  for (const file of files) body.append("files", file);
+  const url = `${root}/collections`;
+  try {
+    return await context.http.postForm<Elsa3ReusableImportUploadResult>(url, body, { signal });
+  } catch (error) {
+    const payload = error instanceof StudioHttpError ? error.payload as { errorCode?: string } | null : null;
+    if (!(error instanceof StudioHttpError && error.status === 415 && payload?.errorCode === "elsa3.import.raw-collection-only")
+      || files.length !== 1 || !files[0].name.toLowerCase().endsWith(".json")) throw error;
+    return context.http.requestJson<Elsa3ReusableImportUploadResult>(url, {
+      method: "POST", body: files[0], headers: { "Content-Type": "application/json" }, signal
+    });
+  }
+}
+
+export async function analyzeElsa3ReusableCollection(
+  context: StudioEndpointContext,
+  collectionHandle: string,
+  offset = 0,
+  limit = 100,
+  signal?: AbortSignal
+) {
+  const query = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+  return context.http.getJson<Elsa3ReusableImportAnalysisPage>(
+    `${root}/collections/${encodeURIComponent(collectionHandle)}/analysis?${query}`,
+    signal ? { signal } : undefined
+  );
+}
+
+export async function expandElsa3ReusableSelection(
+  context: StudioEndpointContext,
+  collectionHandle: string,
+  planId: string,
+  selectedSourceVersionIds: string[],
+  signal?: AbortSignal
+) {
+  return context.http.postJson<Elsa3ReusableImportSelectionReadiness>(
+    `${root}/collections/${encodeURIComponent(collectionHandle)}/selection`,
+    { planId, selectedSourceVersionIds },
+    signal ? { signal } : undefined
+  );
+}
+
+export async function applyElsa3ReusableImport(
+  context: StudioEndpointContext,
+  collectionHandle: string,
+  planId: string,
+  selectedSourceVersionIds: string[],
+  idempotencyKey: string,
+  signal?: AbortSignal,
+  publishImportedActivities?: boolean
+) {
+  const operation = publishImportedActivities === undefined ? "apply" : "apply-drafts";
+  return context.http.postJson<Elsa3ReusableImportReceipt>(
+    `${root}/collections/${encodeURIComponent(collectionHandle)}/${operation}`,
+    { planId, selectedSourceVersionIds, idempotencyKey, publishImportedActivities },
+    signal ? { signal } : undefined
+  );
+}
+
+export async function getElsa3ReusableImportReceipt(
+  context: StudioEndpointContext,
+  idempotencyKey: string,
+  signal?: AbortSignal
+) {
+  return context.http.getJson<Elsa3ReusableImportReceipt>(
+    `${root}/imports/${encodeURIComponent(idempotencyKey)}`,
+    signal ? { signal } : undefined
+  );
+}

@@ -9,21 +9,15 @@ namespace Elsa.Workflows.Runtime.Services.Bookmarks;
 /// durable persistence provider (e.g. the Runtime EF Core module) to make timers survive restarts.
 /// </summary>
 [RuntimeDefaultRegistration]
-public sealed class InMemoryDurableTimerStore : IDurableTimerStore
+public sealed partial class InMemoryDurableTimerStore : IDurableTimerHistoryStore
 {
-    private readonly object _syncRoot = new();
-    private readonly Dictionary<TimerKey, TimerState> _timers = new();
+    private readonly SharedTimerState _shared = new();
+    private object _syncRoot => _shared.SyncRoot;
+    private Dictionary<TimerKey, TimerState> _timers => Bucket.Timers;
 
-    internal void DeleteForWorkflowExecution(string workflowExecutionId)
-    {
-        lock (_syncRoot)
-        {
-            foreach (var key in _timers.Keys
-                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
-                         .ToArray())
-                _timers.Remove(key);
-        }
-    }
+    public InMemoryDurableTimerStore() { }
+
+    internal void DeleteForWorkflowExecution(string workflowExecutionId) => _shared.DeleteForWorkflowExecution(workflowExecutionId);
 
     public bool SupportsClaimTransitions => true;
 
@@ -33,6 +27,7 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         lock (_syncRoot)
         {
             return ValueTask.FromResult(_timers.Values
+                .Where(state => !IsRetired(state))
                 .Select(state => (DateTimeOffset?)(state.VisibleAfter > state.Timer.DueTime
                     ? state.VisibleAfter.Value : state.Timer.DueTime))
                 .Min());
@@ -44,15 +39,22 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         ArgumentNullException.ThrowIfNull(timer);
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (timer.HistoryResponsibility is not null) return SaveCapturedAsync(timer, cancellationToken);
+        if (_access is not null) return SaveLegacyAsync(timer, cancellationToken);
+
         lock (_syncRoot)
         {
             var key = new TimerKey(timer.WorkflowExecutionId, timer.TimerId);
 
             // Existing wins: a deterministic-id re-invoke upserts idempotently and keeps the first deadline.
             if (_timers.TryGetValue(key, out var existing))
+            {
+                EnsureReadable(existing);
                 return new ValueTask<DurableTimer>(existing.Timer);
+            }
 
             _timers.Add(key, new TimerState(timer));
+            AddRunKey(key);
             return new ValueTask<DurableTimer>(timer);
         }
     }
@@ -66,6 +68,7 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         lock (_syncRoot)
         {
             var due = _timers.Values
+                .Where(state => !IsRetired(state))
                 .Select(state => state.Timer)
                 .Where(timer => timer.DueTime <= asOf)
                 .OrderBy(timer => timer.DueTime)
@@ -86,7 +89,7 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         lock (_syncRoot)
         {
             return new ValueTask<DurableTimer?>(
-                _timers.TryGetValue(new TimerKey(workflowExecutionId, timerId), out var timer) ? timer.Timer : null);
+                _timers.TryGetValue(new TimerKey(workflowExecutionId, timerId), out var timer) && !IsRetired(timer) ? timer.Timer : null);
         }
     }
 
@@ -105,6 +108,7 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         lock (_syncRoot)
         {
             var timers = _timers.Values
+                .Where(state => !IsRetired(state))
                 .Select(state => state.Timer)
                 .Where(timer => StringComparer.Ordinal.Equals(timer.WorkflowExecutionId, query.WorkflowExecutionId))
                 .OrderBy(timer => timer.TimerId, StringComparer.Ordinal)
@@ -128,7 +132,13 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
 
         lock (_syncRoot)
         {
-            _timers.Remove(new TimerKey(workflowExecutionId, timerId));
+            var key = new TimerKey(workflowExecutionId, timerId);
+            if (_timers.TryGetValue(key, out var state) && state.Timer.HistoryResponsibility is not null)
+            {
+                if (!IsRetired(state))
+                    throw new NotSupportedException("A captured timer requires an explicit owner terminal observation before deletion.");
+            }
+            else { _timers.Remove(key); RemoveRunKey(key); }
         }
 
         return ValueTask.CompletedTask;
@@ -145,6 +155,7 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
         {
             var candidates = _timers.Values
                 .Where(state =>
+                    !IsRetired(state) &&
                     state.Timer.DueTime <= request.Now &&
                     (state.VisibleAfter is null || state.VisibleAfter <= request.Now))
                 .OrderBy(state => state.VisibleAfter ?? state.Timer.DueTime)
@@ -211,7 +222,11 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
                 return new ValueTask<RuntimeDurableTimerClaimTransitionResult>(
                     RuntimeDurableTimerClaimTransitionResult.Stale);
 
+            if (_timers[key].Timer.HistoryResponsibility is not null)
+                throw new NotSupportedException("A captured timer requires an admitted terminal observation before claim completion.");
+
             _timers.Remove(key);
+            RemoveRunKey(key);
             return new ValueTask<RuntimeDurableTimerClaimTransitionResult>(
                 RuntimeDurableTimerClaimTransitionResult.Applied());
         }
@@ -247,7 +262,7 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
 
     private bool TryGetCurrentState(RuntimeDurableTimerClaim claim, out TimerState state)
     {
-        if (_timers.TryGetValue(KeyOf(claim), out state!) &&
+        if (_timers.TryGetValue(KeyOf(claim), out state!) && !IsRetired(state) &&
             state.Revision == claim.Revision &&
             state.FencingToken == claim.FencingToken &&
             StringComparer.Ordinal.Equals(state.OwnerId, claim.OwnerId))
@@ -281,11 +296,11 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
             state.VisibleAfter!.Value,
             state.FailureCount);
 
-    private readonly record struct TimerKey(string WorkflowExecutionId, string TimerId);
+    internal readonly record struct TimerKey(string WorkflowExecutionId, string TimerId);
 
-    private sealed class TimerState(DurableTimer timer)
+    internal sealed class TimerState(DurableTimer timer)
     {
-        public DurableTimer Timer { get; } = timer;
+        public DurableTimer Timer { get; set; } = timer;
         public string? OwnerId { get; set; }
         public long FencingToken { get; set; }
         public long Revision { get; set; } = 1;

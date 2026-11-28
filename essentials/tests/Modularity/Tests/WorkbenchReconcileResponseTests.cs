@@ -1,4 +1,4 @@
-using Elsa.Workbench;
+using Elsa.Modularity.Api.ModuleManagement;
 using Microsoft.Extensions.Logging;
 using Nuplane.Reconciliation;
 using Xunit;

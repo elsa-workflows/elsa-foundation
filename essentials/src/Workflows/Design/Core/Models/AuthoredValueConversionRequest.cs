@@ -19,7 +19,8 @@ public enum AuthoredValueConversionMode
     None,
     Json,
     Xml,
-    Profile
+    Profile,
+    JsonString
 }
 
 public sealed record AuthoredValueConversionProfile(string Id, string Version);

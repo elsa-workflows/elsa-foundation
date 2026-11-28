@@ -20,7 +20,7 @@ static class Real
     private static readonly MethodInfo WorkerTake = typeof(Worker).GetMethod("TakeAsync", BindingFlags.NonPublic | BindingFlags.Instance, [typeof(CancellationToken)])
         ?? throw new MissingMethodException(nameof(Worker), "TakeAsync");
     private static readonly ConstructorInfo TurnInputCtor = typeof(TurnInput).GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, null,
-        [typeof(Worker), SlotType, typeof(string), typeof(List<Delivery>), typeof(int), typeof(StartSpec)], null)
+        [typeof(Worker), SlotType, typeof(string), typeof(List<Delivery>), typeof(int), typeof(StartSpec), typeof(long)], null)
         ?? throw new MissingMethodException(nameof(TurnInput), ".ctor");
 
     public static readonly SortedDictionary<string, int> Calls = new(StringComparer.Ordinal);
@@ -134,7 +134,7 @@ static class Real
         var slot = Activator.CreateInstance(SlotType, nonPublic: true)!;
         SlotRow.SetValue(slot, row);
         SlotLoaded.SetValue(slot, true);
-        return (TurnInput)TurnInputCtor.Invoke([worker, slot, row.Id, taken, 0, null]);
+        return (TurnInput)TurnInputCtor.Invoke([worker, slot, row.Id, taken, 0, null, worker.Now]);
     }
 
     /// <summary>ChildRegistry.cs 8–17, the registry's stored form.</summary>

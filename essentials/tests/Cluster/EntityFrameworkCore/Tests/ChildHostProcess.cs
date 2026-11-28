@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Json;
 using System.ComponentModel;
 using System.Reflection;
 using System.Text.Json;
@@ -60,8 +61,9 @@ internal sealed class ChildHostProcess : IAsyncDisposable
     /// published host does: the persistence tool reads that directory's own <c>.nuplane</c> state, the package set the running host
     /// last reconciled, which a host running from its build output with a content root of its own never leaves there. With
     /// <paramref name="awaitShells"/> false it returns once the host listens, for a host whose shell is expected not to activate.
+    /// <paramref name="packageFeeds"/> replaces the shipped feeds in the copied settings for fixtures with private feeds.
     /// </summary>
-    public static async Task<ChildHostProcess> StartAsync(string host, string sourceDirectory, string rootPrefix, string shells, IEnumerable<string> packageFiles, IReadOnlyDictionary<string, string> settings, bool deployed = false, bool awaitShells = true)
+    public static async Task<ChildHostProcess> StartAsync(string host, string sourceDirectory, string rootPrefix, string shells, IEnumerable<string> packageFiles, IReadOnlyDictionary<string, string> settings, bool deployed = false, bool awaitShells = true, JsonArray? packageFeeds = null)
     {
         var assemblyPath = AssemblyPath(host, sourceDirectory);
         var contentRoot = Directory.CreateTempSubdirectory(rootPrefix).FullName;
@@ -71,6 +73,14 @@ internal sealed class ChildHostProcess : IAsyncDisposable
                 CopyDirectory(Path.GetDirectoryName(assemblyPath)!, contentRoot);
             foreach (var file in new[] { "appsettings.json", "appsettings.Development.json" })
                 File.Copy(Path.Join(sourceDirectory, file), Path.Join(contentRoot, file), overwrite: true);
+            if (packageFeeds is not null)
+            {
+                var settingsPath = Path.Join(contentRoot, "appsettings.json");
+                var settingsJson = JsonNode.Parse(File.ReadAllText(settingsPath),
+                    documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true })!;
+                settingsJson["Nuplane"]!["Setup"]!["Feeds"] = packageFeeds;
+                File.WriteAllText(settingsPath, settingsJson.ToJsonString());
+            }
             File.WriteAllText(Path.Join(contentRoot, "shells.json"), shells);
             var feed = Directory.CreateDirectory(Path.Join(contentRoot, "packages")).FullName;
             foreach (var package in packageFiles)
@@ -194,6 +204,11 @@ internal sealed class ChildHostProcess : IAsyncDisposable
 
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
     public Task<(HttpStatusCode Status, string Body)> GetAsync(string path) => SendAsync(new HttpRequestMessage(HttpMethod.Get, path));
+
+    /// <summary>The status a <c>POST</c> of <paramref name="body"/> as JSON to <paramref name="path"/> is answered with, and its body.</summary>
+    /// <remarks>The client keeps the cookies the host sets, so a sign-in posted here authenticates the requests after it.</remarks>
+    public Task<(HttpStatusCode Status, string Body)> PostJsonAsync(string path, object body) =>
+        SendAsync(new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) });
 
     /// <summary>The status and body of a root management GET, with its host credential header.</summary>
     public Task<(HttpStatusCode Status, string Body)> GetManagementAsync(string path, string? key)

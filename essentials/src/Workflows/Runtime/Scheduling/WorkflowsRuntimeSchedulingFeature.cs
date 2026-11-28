@@ -8,6 +8,7 @@ using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -79,8 +80,9 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
 
         // In-memory default; a durable persistence provider swaps IDurableTimerStore for a scoped,
         // restart-surviving adapter.
-        services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
-        services.TryAddScoped<IDurableTimerScheduler, DurableTimerScheduler>();
+        services.AddRuntimeDurableTimerScheduler();
+        services.TryAddScoped<IRuntimeHistoryTimerSupport, TimerHistoryCaptureSupport>();
+        services.AddSingleton(new RuntimeHistorySourceSupport([RuntimeHistorySourceFactKind.TimerCancellationRequested], timerOwner: true));
 
         services.AddSingleton<IRecurringTask>(sp => new DurableTimerPumpTask(
             sp.GetRequiredService<IPersistenceScopeRunner>(),

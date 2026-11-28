@@ -1,0 +1,197 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
+import React, { useId, useState } from "react";
+import type { WorkflowInput } from "../workflowTypes";
+import type { StudioBackendSession } from "@elsa-workflows/studio-sdk";
+import { bpmnElementTypeLabel, isDecisionGatewayType, isGatewayElementType, type BpmnElement, type BpmnSequenceFlow } from "./bpmnTypes";
+import { directBindingProperty, directHumanClaimPatch, directHumanClaimRequired, directHumanMode, directHumanPatch } from "./bpmnDirectBinding";
+import { BpmnServiceBindingEditor } from "./BpmnServiceBindingEditor";
+
+interface BpmnElementInspectorProps {
+  element: BpmnElement;
+  outboundFlows: BpmnSequenceFlow[];
+  onChangeElement(elementId: string, patch: Partial<BpmnElement>): void;
+  onChangeFlow(flowId: string, patch: Partial<BpmnSequenceFlow>): void;
+  onSetDefaultFlow(sourceElementId: string, flowId: string | null): void;
+  targetLabelFor(flow: BpmnSequenceFlow): string;
+  readOnly?: boolean;
+  directHumanAvailable?: boolean;
+  /** The backend can publish claim-required human work. */
+  directHumanClaimsAvailable?: boolean;
+  directServiceSession?: StudioBackendSession;
+  directServiceDocumentId?: string;
+  directServiceModelInputs?: WorkflowInput[];
+  isDecision?: boolean;
+  onAddDecision?(): void;
+  conversionBlockedReason?: string;
+  showElementName?: boolean;
+}
+
+// Inspector for a pure BPMN structure element (event/gateway/unbound task) — these have no underlying
+// Elsa activity, so the ordinary activity inspector does not apply. Activity-bearing elements route to
+// the activity inspector via their bound child instead. Outbound sequence-flow conditions are edited
+// here: a conditional flow matches the completing activity's outcome name, and the default flow is
+// taken when nothing else matched.
+export function BpmnElementInspector(props: BpmnElementInspectorProps) {
+  const { element } = props;
+  return (
+    <div className="wf-inspector-content">
+      <div className="wf-inspector-context">
+        <h3>{element.name?.trim() || bpmnElementTypeLabel(element)}</h3>
+        <dl>
+          <dt>Element ID</dt><dd>{element.elementId}</dd>
+          <dt>BPMN element</dt><dd>{bpmnElementTypeLabel(element)}</dd>
+        </dl>
+      </div>
+      <div className="wf-inspector-tab-panels">
+        <div className="wf-inspector-tab-panel"><BpmnElementConfiguration {...props} /></div>
+      </div>
+    </div>
+  );
+}
+
+// Shared with the activity inspector so bound gateways retain both expression and routing editors.
+export function BpmnElementConfiguration({
+  element, outboundFlows, onChangeElement, onChangeFlow, onSetDefaultFlow, targetLabelFor,
+  readOnly = false, directHumanAvailable = false, directHumanClaimsAvailable = false, directServiceSession, directServiceDocumentId, directServiceModelInputs, isDecision = false, onAddDecision, conversionBlockedReason,
+  showElementName = true
+}: BpmnElementInspectorProps) {
+  const gateway = isDecisionGatewayType(element.elementType);
+  const humanMode = directHumanMode(element);
+  const [serviceEditor, setServiceEditor] = useState<string | null>(null);
+  const directControl = ["task", "userTask", "serviceTask"].includes(element.elementType)
+    && (directHumanAvailable || element.properties?.[directBindingProperty] !== undefined);
+  return (
+    <section aria-label="BPMN routing">
+      {showElementName ? <BpmnElementNameField element={element} onChangeElement={onChangeElement} readOnly={readOnly} /> : null}
+      {directControl ? <>
+        <StudioField className="wf-form-field" label={<><span>Task execution</span></>}><select aria-label="Task execution" value={humanMode}
+            disabled={readOnly || !directHumanAvailable || humanMode === "native" || humanMode === "unsupported"}
+            onChange={event => {
+              if (readOnly || !directHumanAvailable || humanMode === "native" || humanMode === "unsupported") return;
+              const mode = event.target.value;
+              if (mode === "human" || mode === "unbound") { setServiceEditor(null); onChangeElement(element.elementId, directHumanPatch(element, mode)); }
+            }}>
+            <option value="unbound">Task (unbound)</option>
+            <option value="human">Human wait — direct BPMN</option>
+            {humanMode === "service" ? <option value="service">Published native service</option> : null}
+            {humanMode === "native" ? <option value="native">Native activity</option> : null}
+            {humanMode === "unsupported" ? <option value="unsupported">Unsupported binding</option> : null}
+          </select></StudioField>
+        {humanMode === "human" && (directHumanClaimsAvailable || directHumanClaimRequired(element)) ? <label className="wf-bpmn-claim-choice">
+          <input type="checkbox" checked={directHumanClaimRequired(element)}
+            disabled={readOnly || !directHumanAvailable || !directHumanClaimsAvailable}
+            onChange={event => {
+              if (!readOnly && directHumanAvailable && directHumanClaimsAvailable) onChangeElement(element.elementId, directHumanClaimPatch(element, event.target.checked));
+            }} />
+          <span>Require a claim before completion</span>
+        </label> : null}
+        {humanMode === "human" && directHumanClaimRequired(element) && !directHumanClaimsAvailable
+          ? <p className="wf-muted" role="note">This backend cannot publish claim-required work. The setting is kept unchanged.</p> : null}
+        <p className="wf-muted" role="note">{humanMode === "unsupported"
+          ? "This binding is kept unchanged. Its settings need a compatible backend or correction before publication."
+          : humanMode === "native" ? "This task has a native activity binding. Unbind it before choosing direct work."
+            : humanMode === "service" ? "This task invokes the selected immutable native workflow publication."
+            : directHumanClaimRequired(element) ? "One authorized person claims this work in BPMN runs; only that person can complete it."
+            : "A human wait pauses the published BPMN process until an authorized person completes it from BPMN runs."}</p>
+        {directServiceSession && directServiceDocumentId && directHumanAvailable && humanMode !== "native" && humanMode !== "unsupported" ? <>
+          {humanMode === "service" || serviceEditor === element.elementId ? <BpmnServiceBindingEditor session={directServiceSession} documentId={directServiceDocumentId} element={element} readOnly={readOnly} modelInputs={directServiceModelInputs}
+            onChange={patch => { if (!readOnly) { onChangeElement(element.elementId, patch); setServiceEditor(null); } }} />
+            : <button type="button" disabled={readOnly} onClick={() => setServiceEditor(element.elementId)}>Bind a published service workflow</button>}
+          {serviceEditor === element.elementId && humanMode !== "service" ? <button type="button" disabled={readOnly} onClick={() => setServiceEditor(null)}>Cancel service selection</button> : null}
+        </> : null}
+      </> : null}
+      {gateway || isDecision ? <>
+        <StudioField className="wf-form-field" label={<><span>Gateway type</span></>}><select value={element.elementType} disabled={readOnly || !!conversionBlockedReason}
+            onChange={event => onChangeElement(element.elementId, { elementType: event.target.value })}>
+            {!gateway ? <option value={element.elementType}>{bpmnElementTypeLabel(element)} (existing)</option> : null}
+            <option value="exclusiveGateway">Exclusive gateway — one path</option>
+            <option value="inclusiveGateway">Inclusive gateway — matching paths</option>
+          </select></StudioField>
+        {conversionBlockedReason ? <p className="wf-muted" role="note">{conversionBlockedReason}</p> : null}
+        {isDecision ? <p className="wf-muted">
+          Outcome returns a path name, such as High or Low. Choose an expression syntax for rules based on
+          workflow data. Expressions must return a configured outcome name, or Done for the fallback path.
+          A blank Outcome also returns Done. Mark one outgoing path as the default.
+          {!gateway ? " This existing Decision is a task. Choose a gateway type to use gateway routing." : ""}
+        </p> : !element.childNodeId ? <div>
+          <p className="wf-muted">Add a BPMN Decision to evaluate an Outcome expression for this gateway.</p>
+          <button type="button" disabled={readOnly || !onAddDecision} onClick={onAddDecision}>Add decision</button>
+          {!onAddDecision ? <p className="wf-muted">BPMN Decision is not available in the activity catalog.</p> : null}
+        </div> : null}
+      </> : null}
+      <OutgoingPaths
+        key={element.elementId}
+        element={element}
+        outboundFlows={outboundFlows}
+        onChangeFlow={onChangeFlow}
+        onSetDefaultFlow={onSetDefaultFlow}
+        targetLabelFor={targetLabelFor}
+        readOnly={readOnly}
+        isDecision={isDecision}
+      />
+    </section>
+  );
+}
+
+export function BpmnElementNameField({
+  element, onChangeElement, readOnly = false, label = "Name"
+}: Pick<BpmnElementInspectorProps, "element" | "onChangeElement" | "readOnly"> & { label?: string }) {
+  return <StudioField className="wf-form-field" label={label}><input type="text" value={element.name ?? ""} placeholder={bpmnElementTypeLabel(element)}
+    aria-label={label} disabled={readOnly} onChange={event => onChangeElement(element.elementId, { name: event.target.value || null })} /></StudioField>;
+}
+
+function OutgoingPaths({
+  element, outboundFlows, onChangeFlow, onSetDefaultFlow, targetLabelFor, readOnly = false, isDecision = false
+}: Pick<BpmnElementInspectorProps, "element" | "outboundFlows" | "onChangeFlow" | "onSetDefaultFlow" | "targetLabelFor" | "readOnly" | "isDecision">) {
+  const [expandedFlowId, setExpandedFlowId] = useState<string | null>(null);
+  const detailsId = useId();
+  const headingId = `${detailsId}-heading`;
+  const compactable = !isGatewayElementType(element.elementType)
+    && !isDecision
+    && outboundFlows.length === 1
+    && !outboundFlows[0].conditionOutcome?.trim()
+    && outboundFlows[0].isDefault !== true
+    && element.defaultFlowId !== outboundFlows[0].flowId;
+
+  return (
+    <section className="wf-bpmn-flow-list" aria-labelledby={headingId}>
+      <h4 id={headingId}>Outgoing paths</h4>
+      {outboundFlows.length > 0 ? <>
+        {outboundFlows.map((flow, index) => {
+          const targetLabel = targetLabelFor(flow);
+          const isDefault = flow.isDefault === true || element.defaultFlowId === flow.flowId;
+          const expanded = expandedFlowId === flow.flowId;
+          const collapsed = compactable && !expanded;
+          const flowDetailsId = `${detailsId}-${index}`;
+          return (
+            <div className="wf-bpmn-flow" key={flow.flowId}>
+              {compactable ? <button type="button" className="wf-bpmn-flow-summary" aria-expanded={expanded} aria-controls={flowDetailsId}
+                onClick={() => setExpandedFlowId(expanded ? null : flow.flowId)}>
+                <span className="wf-bpmn-flow-summary-chevron" aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+                <span className="wf-bpmn-flow-summary-text">{targetLabel} · Any outcome</span>
+              </button> : null}
+              <div id={flowDetailsId} className="wf-bpmn-flow-details" hidden={collapsed}>
+                <span className="wf-bpmn-flow-target" title={flow.flowId}>→ {targetLabel}</span>
+                <StudioField className="wf-form-field" label="Match outcome"><input type="text" value={flow.conditionOutcome ?? ""} placeholder="Any outcome"
+                  aria-label={`Match outcome for flow to ${targetLabel}`}
+                  disabled={readOnly || isDefault}
+                  onFocus={() => setExpandedFlowId(flow.flowId)}
+                  onChange={event => onChangeFlow(flow.flowId, { conditionOutcome: event.target.value || null })} /></StudioField>
+                <label className="wf-bpmn-flow-default">
+                  <input type="checkbox" checked={isDefault} aria-label={`Default flow to ${targetLabel}`}
+                    disabled={readOnly}
+                    onChange={event => onSetDefaultFlow(element.elementId, event.target.checked ? flow.flowId : null)} />
+                  <span>Default</span>
+                </label>
+              </div>
+            </div>
+          );
+        })}
+        <p className="wf-muted">A condition matches the completing activity's outcome name. A blank condition is
+          unconditional. The default flow is taken only when no other flow matches.</p>
+        {isDecision && outboundFlows.every(flow => !!flow.conditionOutcome?.trim() && !flow.isDefault && element.defaultFlowId !== flow.flowId)
+          ? <p className="wf-muted" role="note">No default path is configured. If no path matches, gateway routing faults.</p> : null}
+      </> : <p className="wf-muted">Connect outgoing paths on the canvas, then configure their outcome names here.</p>}
+    </section>
+  );
+}

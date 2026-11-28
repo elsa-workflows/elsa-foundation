@@ -1,7 +1,9 @@
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AnchoredPopover, OverflowMenu, StudioButton, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
+import { MoreHorizontal, Plus, Redo2, Undo2 } from "lucide-react";
+import { StudioAlert, AnchoredPopover, OverflowMenu, StudioButton, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
 import { editTable, parseTable, type Clause, type Table, type TableEdit } from "./decisionXml";
 import type { Diagnostic } from "./decisionsApi";
+import { decisionDiagnosticMessage } from "./decisionDiagnosticMessage";
 
 interface EditorProps { xml: string; readOnly: boolean; onChange(xml: string): void; onError(message: string): void; diagnostics?: Diagnostic[] }
 interface Position { row: number; column: number }
@@ -13,7 +15,7 @@ export function TableEditor(props: EditorProps) {
     try { return { table: parseTable(props.xml) }; }
     catch (error) { return { error: error instanceof Error ? error.message : "This document cannot be edited as a table." }; }
   }, [props.xml]);
-  return parsed.table ? <DecisionGrid {...props} table={parsed.table} /> : <p role="alert">{parsed.error}</p>;
+  return parsed.table ? <DecisionGrid {...props} table={parsed.table} /> : <StudioAlert tone="danger">{parsed.error}</StudioAlert>;
 }
 
 function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], table }: EditorProps & { table: Table }) {
@@ -23,10 +25,12 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
   const [draft, setDraft] = useState("");
   const [showAnnotations, setShowAnnotations] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const cellRefs = useRef(new Map<string, HTMLTableCellElement>());
   const editorRef = useRef<HTMLInputElement>(null);
+  const selectDraftOnStart = useRef(false);
   const previousXml = useRef(xml);
   const expectedXml = useRef<string | null>(null);
   const columnCount = table.inputs.length + table.outputs.length;
@@ -39,7 +43,13 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
     }
     previousXml.current = xml;
   }, [xml]);
-  useLayoutEffect(() => { if (editing) { editorRef.current?.focus(); editorRef.current?.select(); } }, [editing]);
+  useLayoutEffect(() => {
+    if (!editing) return;
+    const editor = editorRef.current;
+    editor?.focus();
+    if (selectDraftOnStart.current) editor?.select();
+    else if (editor) editor.setSelectionRange(editor.value.length, editor.value.length);
+  }, [editing]);
 
   const change = (edit: TableEdit) => {
     if (readOnly) return;
@@ -52,6 +62,7 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
   const focusCell = (position: Position) => cellRefs.current.get(positionKey(position))?.focus();
   const startEditing = (position: Position, initial?: string) => {
     if (readOnly) return;
+    selectDraftOnStart.current = initial === undefined;
     setSelected(position); setAnchor(position); setDraft(initial ?? cellValue(position)); setEditing(position);
   };
   const cellValue = (position: Position) => position.column < table.inputs.length
@@ -83,16 +94,20 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
     const next = { row: Math.max(0, Math.min(table.rules.length - 1, position.row + rowDelta)), column: Math.max(0, Math.min(columnCount - 1, position.column + columnDelta)) };
     selectCell(next, extend);
   };
-  const moveTab = (position: Position, backwards: boolean) => {
+  const adjacentCell = (position: Position, backwards: boolean): Position | undefined => {
     const index = position.row * columnCount + position.column + (backwards ? -1 : 1);
-    const bounded = Math.max(0, Math.min(table.rules.length * columnCount - 1, index));
-    selectCell({ row: Math.floor(bounded / columnCount), column: bounded % columnCount });
+    if (index < 0 || index >= table.rules.length * columnCount) return undefined;
+    return { row: Math.floor(index / columnCount), column: index % columnCount };
   };
   const handleCellKeyDown = (position: Position, event: React.KeyboardEvent<HTMLTableCellElement>) => {
+    if (event.target !== event.currentTarget) return;
     if (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
       move(position, event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0, event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0, event.shiftKey);
-    } else if (event.key === "Tab") { event.preventDefault(); moveTab(position, event.shiftKey); }
+    } else if (event.key === "Tab") {
+      const next = adjacentCell(position, event.shiftKey);
+      if (next) { event.preventDefault(); selectCell(next); }
+    }
     else if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); startEditing(position); }
     else if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); startEditing(position, ""); }
     else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); startEditing(position, event.key); }
@@ -141,27 +156,38 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
   };
   const selectedBounds = selectionBounds();
   const addColumn = (output: boolean) => change({ kind: "add-clause", output });
+  const ruleLabel = table.rules.length === 1 ? "rule" : "rules";
+  const inputLabel = table.inputs.length === 1 ? "input" : "inputs";
+  const outputLabel = table.outputs.length === 1 ? "output" : "outputs";
 
   return <section aria-labelledby="decision-table-title" className={`decision-table-section${expanded ? " is-expanded" : ""}`}>
-    <div className="decision-section-heading"><h2 id="decision-table-title">Decision table</h2><StudioField label="Hit policy"><select value={table.hitPolicy} disabled={readOnly} onChange={event => change({ kind: "policy", value: event.target.value })} aria-describedby="decision-policy-help">
+    <div className="decision-section-heading"><h2 id="decision-table-title">Rules</h2><StudioField className="decision-policy-field" label="Hit policy"><select value={table.hitPolicy} disabled={readOnly} onChange={event => change({ kind: "policy", value: event.target.value })}>
       {!["UNIQUE", "ANY", "FIRST", "RULE ORDER", "COLLECT"].includes(table.hitPolicy) ? <option value={table.hitPolicy}>{table.hitPolicy} (unsupported)</option> : null}
       <option value="UNIQUE">Unique — one match</option><option value="ANY">Any — equal results</option><option value="FIRST">First — first match</option><option value="RULE ORDER">Rule order — all matches</option><option value="COLLECT">Collect — all matches</option>
     </select></StudioField></div>
-    <p id="decision-policy-help" className="decision-muted">Conditions use literals, comparisons, ranges or alternatives. Use - for any non-null value. Text results need double quotes. Validation on the server checks this profile.</p>
     <div className="decision-grid-toolbar" aria-label="Decision table tools">
-      {!readOnly ? <><StudioButton size="sm" disabled={!undoStack.length} onClick={undo} aria-label="Undo table edit">Undo</StudioButton><StudioButton size="sm" disabled={!redoStack.length} onClick={redo} aria-label="Redo table edit">Redo</StudioButton></> : null}
-      <StudioButton size="sm" aria-pressed={showAnnotations} onClick={() => setShowAnnotations(value => !value)}>{showAnnotations ? "Hide annotations" : "Show annotations"}</StudioButton>
-      {!readOnly ? <><StudioButton size="sm" onClick={() => change({ kind: "add-rule" })} disabled={table.rules.length >= 1000}>Add rule</StudioButton><StudioButton size="sm" onClick={() => addColumn(false)} disabled={table.inputs.length >= 32}>Add input</StudioButton><StudioButton size="sm" onClick={() => addColumn(true)} disabled={table.outputs.length >= 16}>Add output</StudioButton></> : null}
-      <StudioButton size="sm" aria-pressed={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? "Collapse table" : "Expand table"}</StudioButton>
-      <span className="decision-grid-hint">Select a cell · Enter or double-click to edit · Tab moves across cells</span>
+      {!readOnly ? <div className="decision-grid-tool-group" role="group" aria-label="History"><StudioButton size="sm" disabled={!undoStack.length} onClick={undo} aria-label="Undo table edit"><Undo2 size={14} aria-hidden="true" /> Undo</StudioButton><StudioButton size="sm" disabled={!redoStack.length} onClick={redo} aria-label="Redo table edit"><Redo2 size={14} aria-hidden="true" /> Redo</StudioButton></div> : null}
+      <div className="decision-grid-tool-group" role="group" aria-label="Structure">
+        {!readOnly ? <StudioButton size="sm" onClick={() => change({ kind: "add-rule" })} disabled={table.rules.length >= 1000}><Plus size={14} aria-hidden="true" /> Add rule</StudioButton> : null}
+        <OverflowMenu ariaLabel="More table actions" triggerIcon={<MoreHorizontal size={16} aria-hidden="true" />} items={[
+          ...(!readOnly ? [
+            { id: "add-input", label: "Add input", disabled: table.inputs.length >= 32, onSelect: () => addColumn(false) },
+            { id: "add-output", label: "Add output", disabled: table.outputs.length >= 16, onSelect: () => addColumn(true) }
+          ] : []),
+          { id: "annotations", label: showAnnotations ? "Hide annotations" : "Show annotations", onSelect: () => setShowAnnotations(value => !value) },
+          { id: "expand", label: expanded ? "Collapse table" : "Expand table", onSelect: () => setExpanded(value => !value) },
+          { id: "expression-help", label: helpOpen ? "Hide expression help" : "Expression help", onSelect: () => setHelpOpen(value => !value) }
+        ]} />
+      </div>
     </div>
+    {helpOpen ? <div className="decision-expression-help" role="note" aria-label="Expression syntax help"><p id="decision-policy-help">Conditions accept literals, comparisons, ranges or alternatives. Use <code>-</code> for any non-null value. Text results need double quotes. The server validates the supported profile.</p><StudioButton size="sm" onClick={() => setHelpOpen(false)}>Hide expression help</StudioButton></div> : null}
     <StudioTableContainer className="decision-table-scroll" tabIndex={0} role="region" aria-label="Decision rules, scroll horizontally for more columns">
       <table className="decision-table decision-grid" role="grid" aria-label={`${table.name || "Decision"} rules`} aria-readonly={readOnly} aria-rowcount={table.rules.length + 2} aria-colcount={columnCount + 1 + (showAnnotations ? 1 : 0) + (readOnly ? 0 : 1)} onCopy={onCopy} onPaste={onPaste}>
         <caption className="decision-visually-hidden">{table.name || "Decision"} rules</caption>
         <colgroup>
           <col className="decision-grid-number-column" />
-          {table.inputs.map(item => <col key={item.id} />)}
-          {table.outputs.map(item => <col key={item.id} />)}
+          {table.inputs.map(item => <col className="decision-grid-data-column" key={item.id} />)}
+          {table.outputs.map(item => <col className="decision-grid-data-column" key={item.id} />)}
           {showAnnotations ? <col className="decision-grid-annotation-column" /> : null}
           {!readOnly ? <col className="decision-grid-actions-column" /> : null}
         </colgroup>
@@ -175,15 +201,19 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
             const output = column >= table.inputs.length, clause = output ? table.outputs[column - table.inputs.length] : table.inputs[column];
             const position = { row, column }, active = same(selected, position) || !selected && row === 0 && column === 0;
             const inRange = !!selectedBounds && row >= selectedBounds.top && row <= selectedBounds.bottom && column >= selectedBounds.left && column <= selectedBounds.right;
+            const isEditing = same(editing, position);
             const diagnostic = diagnostics.find(item => item.ruleId === rule.id && item.clauseId === clause.id);
             const diagnosticId = diagnostic ? `diagnostic-${rule.id}-${clause.id}` : undefined;
-            return <td key={clause.id} id={`cell-${rule.id}-${clause.id}`} role="gridcell" aria-label={`Rule ${row + 1}, ${output ? "output" : "input"} ${clause.name || (output ? column - table.inputs.length : column) + 1}`} aria-selected={inRange || active} aria-describedby={diagnosticId} tabIndex={active ? 0 : -1} className={`decision-grid-cell${active ? " is-active" : ""}${inRange ? " is-selected" : ""}`} ref={element => { if (element) cellRefs.current.set(positionKey(position), element); else cellRefs.current.delete(positionKey(position)); }} onFocus={() => { if (!selected) { setSelected(position); setAnchor(position); } }} onClick={() => selectCell(position)} onDoubleClick={() => startEditing(position)} onKeyDown={event => handleCellKeyDown(position, event)}>
-              {same(editing, position) ? <input ref={editorRef} aria-label="Edit selected cell" value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => {
+            return <td key={clause.id} id={`cell-${rule.id}-${clause.id}`} role="gridcell" aria-label={`Rule ${row + 1}, ${output ? "output" : "input"} ${clause.name || (output ? column - table.inputs.length : column) + 1}`} aria-selected={inRange || active} aria-describedby={diagnosticId} tabIndex={active && !isEditing ? 0 : -1} className={`decision-grid-cell${active ? " is-active" : ""}${inRange ? " is-selected" : ""}${isEditing ? " is-editing" : ""}`} ref={element => { if (element) cellRefs.current.set(positionKey(position), element); else cellRefs.current.delete(positionKey(position)); }} onFocus={() => { if (!selected) { setSelected(position); setAnchor(position); } }} onClick={() => selectCell(position)} onDoubleClick={() => startEditing(position)} onKeyDown={event => handleCellKeyDown(position, event)}>
+              {isEditing ? <input ref={editorRef} aria-label="Edit selected cell" value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => {
                 if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); cancel(); }
                 else if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); commit(); }
-                else if (event.key === "Tab") { event.preventDefault(); event.stopPropagation(); const next = { row, column: column + (event.shiftKey ? -1 : 1) }; commit(next.column < 0 ? { row: Math.max(0, row - 1), column: columnCount - 1 } : next.column >= columnCount ? { row: Math.min(table.rules.length - 1, row + 1), column: 0 } : next); }
+                else if (event.key === "Tab") {
+                  const next = adjacentCell(position, event.shiftKey);
+                  if (next) { event.preventDefault(); event.stopPropagation(); commit(next); }
+                }
               }} onBlur={() => commit(undefined, false)} /> : <span>{text}</span>}
-              {diagnostic ? <span id={diagnosticId} className="decision-cell-diagnostic" role="note">{diagnostic.message}</span> : null}
+              {diagnostic ? <span id={diagnosticId} className="decision-cell-diagnostic" role="note">{decisionDiagnosticMessage(diagnostic, table)}</span> : null}
             </td>;
           })}
           {showAnnotations ? <td><input aria-label={`Rule ${row + 1} annotation`} value={rule.annotation} disabled={readOnly} onChange={event => change({ kind: "annotation", ruleId: rule.id, text: event.target.value })} /></td> : null}
@@ -198,6 +228,7 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
         </tr>)}</tbody>
       </table>
     </StudioTableContainer>
+    <div className="decision-grid-footer"><span>{table.rules.length} {ruleLabel} · {table.inputs.length} {inputLabel} · {table.outputs.length} {outputLabel}</span></div>
   </section>;
 }
 
@@ -215,11 +246,11 @@ function ColumnHeader({ item, index, output, readOnly, count, onChange }: { item
     if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
   };
   return <th scope="col" id={`clause-${item.id}`} className="decision-grid-column">
-    <span className="decision-column-summary">{item.name || `${group} ${index + 1}`} <small>· {item.type || "Unspecified"}</small></span>
+    <div className="decision-column-header"><span className="decision-column-summary"><span>{item.name || `${group} ${index + 1}`}</span><small>{item.type || "Unspecified"}</small></span>
     {!readOnly ? <>
-      <button ref={triggerRef} type="button" className="decision-column-settings" aria-label={`Settings for ${group.toLowerCase()} ${index + 1}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? popoverId : undefined} onClick={() => setOpen(value => !value)}>•••</button>
-      <AnchoredPopover id={popoverId} anchorRef={triggerRef} open={open} className="decision-column-popover" minWidth={220} onDismiss={() => close(false)} onPositioned={() => nameInputRef.current?.focus()}>
-        <div role="dialog" aria-label={`${group} ${index + 1} settings`} onKeyDown={event => {
+      <button ref={triggerRef} type="button" className="decision-column-settings" aria-label={`Settings for ${group.toLowerCase()} ${index + 1}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? popoverId : undefined} onClick={() => { setName(item.name); setType(item.type); setOpen(value => !value); }}>⋯</button>
+      <AnchoredPopover id={popoverId} anchorRef={triggerRef} open={open} className="decision-column-popover" minWidth={220} onDismiss={() => close(false)} onPositioned={() => nameInputRef.current?.focus()}
+        role="dialog" aria-label={`${group} ${index + 1} settings`} onKeyDown={event => {
           if (event.key === "Escape") { event.preventDefault(); close(true); }
         }}>
           <label>{group} {index + 1} name<input ref={nameInputRef} aria-label={`${group} ${index + 1} name`} value={name} onChange={event => setName(event.target.value)} /></label>
@@ -229,8 +260,8 @@ function ColumnHeader({ item, index, output, readOnly, count, onChange }: { item
           </select></label>
           <StudioButton size="sm" onClick={() => { onChange({ kind: "clause", id: item.id, output, name, type }); close(true); }}>Save column</StudioButton>
           <StudioButton size="sm" variant="ghost" disabled={count <= 1} onClick={() => { onChange({ kind: "delete-clause", id: item.id, output }); close(false); }}>Remove {group.toLowerCase()}</StudioButton>
-        </div>
       </AnchoredPopover>
     </> : null}
+    </div>
   </th>;
 }

@@ -5,7 +5,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using FoundationHost = Elsa.Foundation.Host.Shells;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -62,12 +61,14 @@ public sealed class NuplaneReloadResultCallbackTests
         Assert.Equal(new Exception[] { first, second }, logger.Exceptions.Where(exception => exception is not null).Cast<Exception>());
     }
 
-    [Fact(DisplayName = "Foundation substitutes the host path for a refusal from a private contract copy")]
-    public async Task Foundation_callback_RecognizesForeignRefusal_AndSubstitutesHostDirectory()
+    [Theory(DisplayName = "Both hosts substitute the host path for a refusal from a private contract copy")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Callback_RecognizesForeignRefusal_AndSubstitutesHostDirectory(bool foundation)
     {
         using var configuration = NuplaneHostTestComposition.CreateConfiguration("true");
         var logger = new CapturingLogger();
-        using var services = NuplaneHostTestComposition.BuildProfile(configuration, foundation: true, logger: logger);
+        using var services = NuplaneHostTestComposition.BuildProfile(configuration, foundation, logger);
         var callback = services.GetRequiredService<IOptionsMonitor<NuplaneIntegrationOptions>>().CurrentValue.OnReloadResults!;
         var foreign = FoundationHostReloadEndpointTests.ForeignRefusal.Create(
             $"Apply this refusal with dotnet elsa persistence apply --host {IEfModuleRefusal.HostPlaceholder} --modules Orders --provider Sqlite --connection-env ELSA_EF_CONNECTION.");

@@ -13,7 +13,7 @@ namespace Elsa.Architecture.Tests;
 /// <c>tests</c> roots, so it never collides with an Essentials domain that shares its name.
 /// </para>
 /// <para>
-/// Hosts (<c>apps</c>), tools, samples and Studio belong to no domain.
+/// Hosts (<c>server/apps</c>), tools, samples and Studio belong to no domain.
 /// </para>
 /// </remarks>
 internal static class ElsaDomains

@@ -5,7 +5,6 @@ using CShells.Configuration;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Resumption;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -17,8 +16,8 @@ public sealed class EfToolingConfigurationContextTests
 {
     private static readonly Assembly[] RuntimeFeatureAssemblies =
     [
-        typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
-        typeof(WorkflowsRuntimeResumptionFeature).Assembly,
+        typeof(RuntimeDbContext).Assembly,
+        typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(TasksFeature).Assembly
     ];
 
@@ -253,7 +252,7 @@ public sealed class EfToolingConfigurationContextTests
                 "DefaultResource": "primary"
               } },
               "CShells": { "Shells": { "default": {
-                "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } }
             }
             """);
@@ -267,8 +266,8 @@ public sealed class EfToolingConfigurationContextTests
         Assert.True(result.HasApplicableResource);
         Assert.Empty(result.RefusalCodes);
         Assert.Contains("expected-connection-unchecked", result.UnresolvedCodes);
-        Assert.Equal("Sqlite", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:Provider"]);
-        Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeEntityFrameworkCore:ConnectionName"]);
+        Assert.Equal("Sqlite", result.Patch.ConfigurationData["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:Provider"]);
+        Assert.Equal("Shared", result.Patch.ConfigurationData["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:ConnectionName"]);
         Assert.Equal("primary", Assert.Single(result.Participants).ResourceName);
     }
 
@@ -321,7 +320,7 @@ public sealed class EfToolingConfigurationContextTests
               "DefaultResource": "primary"
             } }, "CShells": { "Shells": {
               "first": { "Name": "first" },
-              "second": { "Name": "second", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} } }
+              "second": { "Name": "second", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} } }
             } } }
             """);
         using var context = host.Create(EfToolingConfigurationContext.WorkbenchJson,
@@ -419,7 +418,7 @@ public sealed class EfToolingConfigurationContextTests
                 "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
                 "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         using var request = new MemoryStream("""{"version":2,"command":"list","selection":{"kind":"from-host"},"resource":"primary"}"""u8.ToArray());
@@ -451,7 +450,7 @@ public sealed class EfToolingConfigurationContextTests
                   "unused": { "Provider": "Sqlite", "ConnectionName": "Other" }
                 }, "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         using var request = new MemoryStream("""{"version":2,"command":"list","resource":"unused"}"""u8.ToArray());
@@ -474,7 +473,7 @@ public sealed class EfToolingConfigurationContextTests
                 "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "MissingUntilDeployment" } },
                 "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         using var request = new MemoryStream("""{"version":2,"command":"plan","selection":{"kind":"from-host"},"resource":"primary","provider":"Sqlite"}"""u8.ToArray());
@@ -503,7 +502,7 @@ public sealed class EfToolingConfigurationContextTests
                 "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
                 "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         using var request = new MemoryStream("""{"version":2,"command":"plan","selection":{"kind":"from-host"},"resource":"primary","provider":"PostgreSql"}"""u8.ToArray());
@@ -532,7 +531,7 @@ public sealed class EfToolingConfigurationContextTests
                 "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
                 "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         using var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(new
@@ -558,7 +557,7 @@ public sealed class EfToolingConfigurationContextTests
     {
         using var context = ToolingContextForTestAssembly("""
             { "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         using var request = new MemoryStream("""{"version":2,"command":"plan","selection":{"kind":"from-host"},"provider":"Sqlite"}"""u8.ToArray());
@@ -580,7 +579,7 @@ public sealed class EfToolingConfigurationContextTests
         using var context = ToolingContextForTestAssembly("""
             { "CShells": { "Shells": { "default": {
                 "Name": "default", "Features": {
-                  "WorkflowsRuntimeEntityFrameworkCore": { "Provider": "PostgreSql" }
+                  "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": { "Provider": "PostgreSql" }
                 }
               } } } }
             """, shell: "default", explicitSelection: true);
@@ -603,7 +602,7 @@ public sealed class EfToolingConfigurationContextTests
                 "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
                 "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         var output = Path.Combine(Path.GetTempPath(), $"elsa-context-script-{Guid.NewGuid():N}");
@@ -640,7 +639,7 @@ public sealed class EfToolingConfigurationContextTests
                 "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
                 "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         using var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(new
@@ -670,7 +669,7 @@ public sealed class EfToolingConfigurationContextTests
                 "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
                 "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         using var request = new MemoryStream("""{"version":2,"command":"apply","selection":{"kind":"from-host"},"provider":"Sqlite","connection":"Data Source=unused.db"}"""u8.ToArray());
@@ -693,7 +692,7 @@ public sealed class EfToolingConfigurationContextTests
                 "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "MissingUntilDeployment" } },
                 "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """, shell: "default", explicitSelection: true);
         using var request = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(new
@@ -725,7 +724,7 @@ public sealed class EfToolingConfigurationContextTests
                     "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
                     "DefaultResource": "primary"
                   } }, "CShells": { "Shells": { "default": {
-                    "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                    "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
                   } } } }
                 """, shell: "default", explicitSelection: true);
 
@@ -770,7 +769,7 @@ public sealed class EfToolingConfigurationContextTests
                 "Resources": { "primary": { "Provider": "Sqlite", "ConnectionName": "Shared" } },
                 "DefaultResource": "primary"
               } }, "CShells": { "Shells": { "default": {
-                "Name": "default", "Features": { "WorkflowsRuntimeEntityFrameworkCore": {} }
+                "Name": "default", "Features": { "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {} }
               } } } }
             """);
         var cases = new (string Payload, string Code)[]
@@ -924,6 +923,6 @@ public sealed class ToolingContextTestDefaults : IEfToolingShellDefaults
 public sealed class ToolingCodeDefaultTestDefaults : IEfToolingShellDefaults
 {
     public void Configure(ShellBuilder builder, IConfiguration configuration) =>
-        builder.WithFeature<RuntimeEntityFrameworkCoreFeature>()
+        builder.WithFeature<RuntimeArtifactsEntityFrameworkCoreFeature>()
             .WithConfiguration("Elsa:Persistence:DefaultResource", "primary");
 }

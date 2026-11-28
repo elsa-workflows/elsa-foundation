@@ -28,6 +28,9 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark', 'narrow-390-light', 'narrow-390-dark'}
 TOUCH_PROJECTS = {f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')}
 CAPTURES = {
+    'executable activity bindings fit the inspector': ['reference', 'executable-activity-empty', 'executable-activity-inputs', 'executable-activity-expanded', 'executable-activity-identity'],
+    'native child and compensation history navigation': ['reference', 'child-dispatch', 'child-journal', 'child-consumed-bookmark', 'child-settlement', 'child-cause', 'compensation-confirmed', 'compensation-recovery', 'compensation-journal'],
+    'durable timer history and bookmark resumption': ['reference', 'timer-waiting-journal', 'timer-active-bookmark', 'timer-dispatched', 'timer-cause', 'timer-consumed-bookmark'],
     'native BPMN workflow blocks preserve reviewed XML bindings': ['reference'] + [f'workflow-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
     'native BPMN reusable blocks preserve reviewed XML bindings': ['reference'] + [f'activity-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
     'native BPMN workflow blocks retain authoring boundaries': ['reference'] + [f'workflow-bpmn-{state}' for state in ('inspector-toolbar', 'empty-preview', 'empty-nested', 'empty-reloaded', 'empty-ungrouped', 'refused', 'captured-input', 'readonly')],
@@ -62,9 +65,11 @@ CAPTURES = {
     'repair scoped JavaScript references': ['reference', 'sum-binding-mode', 'sum-fix', 'sum-picker', 'write-line-fix', 'calculator-direct-repair', 'write-line-picker', 'write-line-result-warning', 'write-line-result-fixed', 'calculator-completed'],
     'insert JavaScript activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
     'insert Liquid activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
+    'complete typed variable members in JavaScript': ['reference', 'typed-compact-completion', 'typed-member-applied', 'typed-member-hover', 'untyped-no-members', 'typed-expanded-completion', 'chooser-typed-variable', 'chooser-typed-variable-whole'],
+    'complete typed collection items in JavaScript': ['reference', 'collection-item-completion', 'collection-item-applied', 'collection-item-hover', 'collection-callback-completion', 'collection-callback-hover', 'collection-member-picker'],
     'preserve expression data without optional modules': ['reference', 'missing-javascript', 'missing-javascript-reopened', 'missing-liquid', 'missing-liquid-reopened', 'missing-native-control', 'missing-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
-    # Supplementary journeys (Studio/tests/acceptance/supplements.spec.ts) run once per their own project.
+    # Supplementary journeys (studio/tests/acceptance/supplements.spec.ts) run once per their own project.
     'coarse pointer grouped navigation': ['touch-groups-open', 'touch-group-collapsed', 'touch-local-views', 'touch-settings-runtime', 'touch-top-group-open', 'touch-top-search', 'touch-search-no-match', 'touch-search-outside-dismissed', 'touch-keyboard-recovery'],
     'restricted principal settings access': ['restricted-appearance', 'restricted-features-settings-denied', 'restricted-features-bookmark-denied', 'restricted-runtime-readonly', 'restricted-keyboard-recovery'],
     'activity availability load failures and recovery': ['availability-loading', 'availability-settled', 'availability-abort-error', 'availability-abort-recovered', 'availability-client-500-error', 'availability-client-500-recovered'],
@@ -74,7 +79,13 @@ CAPTURES = {
     'native dashboard questions and sharing': ['reference', 'dashboard-native-reference', 'questions-empty', 'question-controls', 'question-validation', 'question-preview', 'question-drill', 'question-drill-values', 'question-saved', 'question-refreshed', 'question-editor-preview-appearance-1', 'question-editor-preview-appearance-2', 'question-saved-refresh-drill', 'question-saved-refresh-drill-values', 'question-history', 'question-copy', 'question-records', 'question-navigation-cancelled', 'question-retained-tab', 'question-navigation-confirmed', 'dashboard-layout', 'dashboard-reopened', 'dashboard-multi-tile', 'dashboards-collection-appearance-1', 'dashboards-collection-appearance-2', 'dashboard-and-dependency-dialogs-appearance-1-dashboard', 'dashboard-and-dependency-dialogs-appearance-1-share-review', 'dashboard-and-dependency-dialogs-appearance-1-copy-review', 'dashboard-and-dependency-dialogs-appearance-2-dashboard', 'dashboard-and-dependency-dialogs-appearance-2-share-review', 'dashboard-and-dependency-dialogs-appearance-2-copy-review', 'dashboard-refresh-cancelled', 'dashboard-refresh-retried', 'dashboard-tile-settings', 'dashboard-drill', 'dashboard-drill-values', 'dashboard-copy-dependency-review', 'dashboard-copy-independent-question', 'dashboard-copy', 'question-share', 'dashboard-share-dependency-review', 'dashboard-share', 'question-shared-search', 'shared-question', 'shared-dashboard', 'question-source-unavailable', 'question-repair-blank', 'question-repair-reopened', 'question-revoke', 'question-access-lost', 'dashboard-unavailable-tiles', 'question-new-reuse-confirmation', 'questions-collection-appearance-1', 'questions-collection-appearance-2', 'question-conflict', 'question-conflict-recovered'],
     'existing home widgets and layout defaults': ['reference', 'home-widgets', 'home-module-picker-1', 'home-module-picker-2', 'home-module-run-health', 'home-module-portfolio', 'home-module-settings', 'home-module-settings-reopened', 'home-layout-edit', 'home-layout-reopened', 'home-populated-appearance-1', 'home-populated-appearance-2', 'home-widget-picker', 'home-server-default', 'home-existing-aliases'],
     'execution navigation keeps keyboard focus and exact evidence': ['reference', 'standalone-exact', 'standalone-menu', 'completed-while-observation-paused', 'attached-first-boundary', 'retained-middle-occurrence', 'restored-exact-occurrence'],
+    'timeline durable diagnostics and process restart': ['reference', 'diagnostics-approval-before-restart', 'diagnostics-approval-restored', 'diagnostics-approval-consumed', 'diagnostics-approval-consumed-action', 'diagnostics-approval-retained-after-restart', 'diagnostics-approval-retained-action', 'diagnostics-passive-expiry', 'diagnostics-passive-expiry-explanation', 'diagnostics-passive-expiry-journal', 'diagnostics-duplicate-delivery', 'diagnostics-single-consumption', 'diagnostics-single-consumption-action', 'diagnostics-history-stale', 'diagnostics-history-recovered'],
+    'production history occurrence and approval qualification': ['reference', 'history-wait', 'history-completed', 'history-fault', 'history-retained-boundary'],
     'timeline selection retains its tab and exact occurrence': ['reference', 'timeline-populated', 'timeline-click', 'timeline-keyboard', 'activity-details', 'timeline-return'],
+    'recorded activity playback transport': ['reference', 'playback-transport-next', 'playback-transport-paused', 'playback-transport-diagram', 'playback-transport-activity', 'playback-transport-return', 'playback-transport-repeat-first', 'playback-transport-repeat-second', 'playback-transport-end', 'playback-transport-scoped', 'playback-transport-retry-source', 'playback-transport-retry'],
+    'recorded activity playback ordinal seeking': ['reference', 'playback-seek-older-repeat', 'playback-seek-pending', 'playback-seek-latest', 'playback-seek-failed', 'playback-seek-retried'],
+    'recorded activity playback live bounds and waits': ['reference', 'playback-live-waiting', 'playback-live-frozen', 'playback-live-refreshed', 'playback-live-recorded-wait'],
+    'recorded activity playback coverage and access': ['reference', 'playback-access-metadata-only', 'playback-access-pending', 'playback-access-revoked', 'playback-coverage-invalidated', 'playback-coverage-retained', 'playback-coverage-pin-unavailable', 'playback-coverage-disabled', 'playback-coverage-uncaptured', 'playback-coverage-unsupported'],
 }
 NATIVE_RESULT_CAPTURES = ('provenance', 'coverage-periods', 'series-1', 'series-2', 'series-3', 'exact-values', 'exact-values-end')
 CAPTURES['native dashboard questions and sharing'] += (
@@ -105,8 +116,13 @@ MEMBER_JOURNEYS = {'choose nested activity data', 'choose declared and scoped ac
 EXPRESSION_JOURNEYS = {'insert JavaScript activity data', 'insert Liquid activity data'}
 MINIMAL_ONLY_JOURNEYS = {'preserve expression data without optional modules'}
 DATA_JOURNEYS = MEMBER_JOURNEYS | COPY_JOURNEYS | {'choose data for activity outputs'} | EXPRESSION_JOURNEYS | MINIMAL_ONLY_JOURNEYS
+# Journeys that need the fixture's proof variable types (a Customer type that admits lists).
+PROOF_TYPE_JOURNEYS = {'complete typed collection items in JavaScript'}
 COMPOSITIONS = {'normal', 'minimal', 'default-off'}
 
+
+def journey_pattern(journeys):
+    return r'(?:^|\s)(?:' + '|'.join(re.escape(name) for name in sorted(journeys)) + ')$'
 
 def selected_journeys(journeys=None, composition='normal'):
     if composition != 'normal' and journeys is None:
@@ -116,6 +132,8 @@ def selected_journeys(journeys=None, composition='normal'):
     selected = NORMAL_JOURNEYS if journeys is None else {journeys} if isinstance(journeys, str) else set(journeys)
     if not selected or not selected <= JOURNEYS or composition not in COMPOSITIONS:
         raise ValueError('Unknown or empty journey/composition inventory')
+    if selected & CLASSIC_JOURNEYS:
+        raise ValueError('Run these journeys in the pinned classic Workbench checkout in docs/contributing/workbench-compatibility-tests.md')
     if composition != 'normal' and not selected <= DATA_JOURNEYS:
         raise ValueError('Minimal/default-off composition requires explicit activity-data journeys')
     if composition == 'normal' and selected & MINIMAL_ONLY_JOURNEYS or composition == 'minimal' and selected & EXPRESSION_JOURNEYS:
@@ -129,6 +147,8 @@ def selected_journeys(journeys=None, composition='normal'):
 
 def configure_activity_data(backend_shells, studio_shells, composition, journeys):
     """Configure private copies only; default-off observes the committed default without forcing a false flag."""
+    if journeys & PROOF_TYPE_JOURNEYS:
+        backend_shells['CShells']['Shells']['default']['Features'].setdefault('ActivityDataSelectionProofTypes', {})
     if not journeys & DATA_JOURNEYS:
         return
     backend = backend_shells['CShells']['Shells']['default']['Features']
@@ -142,8 +162,18 @@ def configure_activity_data(backend_shells, studio_shells, composition, journeys
         for key in ('JavaScriptExpressionEditorStudio', 'LiquidExpressionEditorStudio'):
             studio.pop(key, None)
 ADDITIONAL_ARTIFACTS = {
+    'native child and compensation history navigation': {'native-history-owners-oracle.json'},
+    'durable timer history and bookmark resumption': {'timer-history-oracle.json'},
+    'recorded activity playback transport': {'playback-transport-oracle.json'},
+    'recorded activity playback ordinal seeking': {'playback-seeking-oracle.json'},
+    'recorded activity playback live bounds and waits': {'playback-live-oracle.json'},
+    'recorded activity playback coverage and access': {'playback-coverage-oracle.json'},
+    'timeline durable diagnostics and process restart': {'timeline-diagnostics-oracle.json'},
+    'production history occurrence and approval qualification': {'history-production-oracle.json'},
     'Double activity output binds to text': {'numeric-binding-proof.json'},
     'set output assigns reusable activity output': {'set-output-proof.json'},
+    'complete typed variable members in JavaScript': {'activity-data-proof.json', 'typed-completion-proof.json'},
+    'complete typed collection items in JavaScript': {'activity-data-proof.json', 'typed-collection-proof.json'},
     **{journey: {'activity-data-proof.json', 'activity-data-copy-proof.json'} for journey in COPY_JOURNEYS},
     **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS - COPY_JOURNEYS},
     **{journey: {'activity-data-proof.json', 'expression-data-proof.json'} for journey in EXPRESSION_JOURNEYS},
@@ -162,7 +192,29 @@ EVIDENCE = {
     'runtime-only API composition and combined return': ['subset-capabilities.json', 'subset-observation.json', 'combined-capabilities.json'],
 }
 JOURNEYS = set(CAPTURES)
-NORMAL_JOURNEYS = JOURNEYS - MINIMAL_ONLY_JOURNEYS
+CLASSIC_JOURNEYS = {
+    'business decisions authoring and explanations',
+    'compact runtime Inputs retain exact captured values and accessible technical details',
+    'durable timer history and bookmark resumption',
+    'executable designer parity',
+    'execution navigation keeps keyboard focus and exact evidence',
+    'existing home widgets and layout defaults',
+    'explicit authored activity names survive publication and execution',
+    'native BPMN reusable blocks preserve reviewed XML bindings',
+    'native BPMN workflow blocks preserve reviewed XML bindings',
+    'native BPMN workflow blocks retain authoring boundaries',
+    'native child and compensation history navigation',
+    'production history occurrence and approval qualification',
+    'recorded activity playback coverage and access',
+    'recorded activity playback live bounds and waits',
+    'recorded activity playback ordinal seeking',
+    'recorded activity playback transport',
+    'timeline durable diagnostics and process restart',
+    'timeline selection retains its tab and exact occurrence',
+    'user task authoring and workflow result',
+    'user tasks inbox and response',
+}
+NORMAL_JOURNEYS = JOURNEYS - MINIMAL_ONLY_JOURNEYS - CLASSIC_JOURNEYS
 SUPPLEMENT_PROJECTS = {
     'coarse pointer grouped navigation': TOUCH_PROJECTS,
     'restricted principal settings access': {'restricted-390-light'},
@@ -180,7 +232,7 @@ SUBSET_COMPOSITIONS = {
     'runtime-api-subset': {
         'journeys': {'runtime-only API composition and combined return'},
         'remove': ['ActivitiesDesignApi', 'ActivitiesDispatchWorkflowDesign', 'ActivitiesGraphDesign', 'AgentApi', 'AgentDesign',
-                   'ConnectionsApi', 'SecretsApi', 'WorkflowsDashboard', 'WorkflowsDesignApi'],
+                   'ConnectionsApi', 'SecretsApi', 'WorkflowsDashboardRetained', 'WorkflowsDesignApi'],
     },
 }
 IDENTITY_SEED_FEATURE = 'FoundationIdentityAspNetCoreIdentityEntityFrameworkCore'
@@ -200,10 +252,14 @@ def configure_dashboard_qualification(settings, shells):
               'workflows/runtime:read', 'workflows/design:read']
     no_source = [grant for grant in native if grant not in
                  {'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'}]
+    history = ['api-capabilities:read', 'workflows/runtime:read', 'workflows/activity-executions:inspect']
     settings['Qualification'] = {
         'Principals': [{'subject': 'dashboard-qa-reader', 'tenant': 'default',
-                        'username': 'dashboard-reader', 'password': 'Password123!', 'exactDirectPermissions': native}],
-        'GrantProfiles': {'dashboard-native-reader': native, 'dashboard-native-no-source': no_source},
+                        'username': 'dashboard-reader', 'password': 'Password123!', 'exactDirectPermissions': native},
+                       {'subject': 'history-qa-reader', 'tenant': 'default',
+                        'username': 'history-reader', 'password': 'Password123!', 'exactDirectPermissions': history}],
+        'GrantProfiles': {'dashboard-native-reader': native, 'dashboard-native-no-source': no_source,
+                          'history-reader': history, 'history-no-structure': history[:-1]},
     }
     # Keep the selected adapter composed, with inference explicitly unavailable in this native-only run.
     features = shells['CShells']['Shells']['default']['Features']
@@ -718,12 +774,14 @@ def free_port():
 
 
 @contextmanager
-def host(directory, dll, url, ready_path, log, env):
+def host(directory, dll, url, ready_path, log, env, on_started=None):
     # No dotnet run / launch profile: its project directory and URL could target an existing development store.
     with log.open('w') as output:
         process = subprocess.Popen(['dotnet', str(directory / dll), '--contentRoot', str(directory), '--urls', url],
                                    cwd=directory, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
+            if on_started is not None:
+                on_started(process)
             deadline = time.monotonic() + 180
             while True:
                 if process.poll() is not None:
@@ -750,15 +808,18 @@ def host(directory, dll, url, ready_path, log, env):
             stop_group(process, graceful_timeout=45)
 
 
-def prepare_host(project, destination):
-    output = project.parent / 'bin/Debug/net10.0'
-    shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "packages", "appsettings*.json", "shells*.json"))
+def prepare_host(project, destination, *, configuration_directory=None):
+    copy_host(project.parent / 'bin/Debug/net10.0', destination, configuration_directory or project.parent)
+
+
+def copy_host(output, destination, configuration_directory):
+    shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "native-store", "packages", "appsettings*.json", "shells*.json"))
     # Older local outputs may contain stores. Never seed acceptance from them.
     for file in destination.rglob('*'):
         if file.is_file() and (file.suffix in {'.db', '.db-shm', '.db-wal'} or file.name == 'nuplane.lock.json'):
             file.unlink()
     for name in ['appsettings.json', 'shells.json']:
-        shutil.copy2(project.parent / name, destination / name)
+        shutil.copy2(configuration_directory / name, destination / name)
 
 
 def compose_shells(shells, studio_url, remove=(), seed=None):
@@ -926,13 +987,17 @@ def copy_implementation_assets(source, normal, diagnostics):
 def run(output, journey=None, studio_root=None, composition='normal'):
     output.mkdir(parents=True, exist_ok=False)
     studio_root = (studio_root or ROOT).resolve()
+    studio_product = studio_root / 'studio'
+    legacy_product = studio_root / 'Studio'
+    if not studio_product.is_dir() and legacy_product.is_dir():
+        studio_product = legacy_product
     sha, dirty = source_state(ROOT)
     studio_sha, studio_dirty = source_state(studio_root)
     head = os.environ.get('UX_PR_HEAD_SHA', sha)
     selected = selected_journeys(journey, composition)
     fixture_built = False
     owned_processes = {}
-    backend_project = ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
+    backend_project = ROOT / 'server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
     report = {'sourceSha': sha, 'headSha': head, 'dirty': bool(dirty),
               'kind': 'composed-source', 'studioSourceSha': studio_sha, 'studioDirty': bool(studio_dirty), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
@@ -942,31 +1007,31 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         if not (supplies_pr_head(ROOT, sha, head) or supplies_pr_head(studio_root, studio_sha, head)):
             raise ValueError('The claimed PR head supplied neither observed source tree nor a verified CI merge parent')
-        studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
+        studio_project = studio_product / 'src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
         backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:1', '-nr:false', '-v:q', '-nologo']
-        if selected & DATA_JOURNEYS:
+        if selected & (DATA_JOURNEYS | PROOF_TYPE_JOURNEYS):
             fixture = ROOT / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
             backend_command.append(f'-p:CustomAfterMicrosoftCommonTargets={fixture}')
             report['fixture'] = {str(file.relative_to(ROOT)): hashlib.sha256(file.read_bytes()).hexdigest()
                                  for file in (fixture, fixture.with_name('CustomerFixture.cs'))}
             fixture_built = True
         command(backend_command, output / 'backend-build.log')
-        command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'Studio')
-        workflow_module = studio_root / 'Studio/src/essentials/Elsa.Studio.Workflows'
+        command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_product)
+        workflow_module = studio_product / 'src/essentials/Elsa.Studio.Workflows'
         workflow_assets = fingerprints(workflow_module / 'wwwroot/studio/modules/workflows')
         report['workflowSourceAssets'] = workflow_assets
         copy_assets = {}
         if selected & COPY_JOURNEYS:
             diagnostics = output / 'copy-asset-diagnostics'
             command(['pnpm', '--filter', '@elsa-workflows/studio-workflows', 'exec', 'vite', 'build', '--sourcemap', 'hidden', '--outDir', str(diagnostics)],
-                    output / 'copy-asset-diagnostics.log', cwd=studio_root / 'Studio')
+                    output / 'copy-asset-diagnostics.log', cwd=studio_product)
             copy_assets = copy_implementation_assets(workflow_module / 'Client/src', workflow_module / 'wwwroot/studio/modules/workflows', diagnostics)
             report['copyImplementationAssets'] = copy_assets
         report['stage'] = 'isolated-field-gallery'
         gallery = output / 'outlined-gallery'
         gallery_port = free_port()
         command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/browser/playwright.outlined-fields.config.ts'],
-                output / 'outlined-gallery.log', cwd=studio_root / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port)))
+                output / 'outlined-gallery.log', cwd=studio_product, env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port), DEBUG="vite:deps,vite:transform"))
         gallery_report = json.loads((gallery / 'playwright.json').read_text())
         gallery_url = gallery_report.get('config', {}).get('metadata', {}).get('outlinedBaseURL')
         report['isolatedFieldGallery'] = {'executed': field_gallery_verdict(gallery_report, gallery, gallery_port),
@@ -1030,7 +1095,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                 password = f'Ux-{secrets.token_urlsafe(18)}-9a'
                 seed = {'user': RESTRICTED_USER, 'password': password, 'role': RESTRICTED_SEED_ROLE}
                 configure_owned_host(combined, seed=seed)
-                with host(combined['backend'], 'Elsa.Workbench.dll', combined['backendUrl'], '/health/ready', output / 'backend-restricted-seed.log', env) as seed_process:
+                with host(combined['backend'], 'Elsa.Workbench.Host.dll', combined['backendUrl'], '/health/ready', output / 'backend-restricted-seed.log', env) as seed_process:
                     owned_processes['restrictedSeedBackend'] = seed_process
                     report['ownedPids']['restrictedSeedBackend'] = seed_process.pid
                 receipt = restrict_seeded_reader(combined['backend'])
@@ -1058,19 +1123,19 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             with ExitStack() as owned:
                 for item in hosts:
                     prefix = '' if item['name'] == 'combined' else f"{item['name']}-"
-                    backend_process = owned.enter_context(host(item['backend'], 'Elsa.Workbench.dll', item['backendUrl'], '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", backend_env))
+                    backend_process = owned.enter_context(host(item['backend'], 'Elsa.Workbench.Host.dll', item['backendUrl'],
+                        '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", backend_env))
                     owned_processes[f'{prefix}backend'] = backend_process
                     report['ownedPids'][f'{prefix}backend'] = backend_process.pid
-                    studio_process = owned.enter_context(host(item['studio'], 'Elsa.Studio.Web.dll', item['studioUrl'], '/studio-runtime.js', output / f"{item['prefix']}studio.log",
+                    studio_process = owned.enter_context(host(item['studio'], 'Elsa.Studio.Workbench.Host.dll', item['studioUrl'], '/studio-runtime.js', output / f"{item['prefix']}studio.log",
                                              dict(env, Studio__BackendBaseUrl=item['backendUrl'])))
                     owned_processes[f'{prefix}studio'] = studio_process
                     report['ownedPids'][f'{prefix}studio'] = studio_process.pid
                 report['stage'] = 'journeys'
-                browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
-                if journey is not None:
-                    # Playwright greps project/file/title together; anchor the exact final title.
-                    browser_command.extend(['--grep', r'(?:^|\s)(?:' + '|'.join(re.escape(name) for name in sorted(selected)) + ')$'])
-                command(browser_command, output / 'journeys.log', cwd=studio_root / 'Studio', env=browser_env)
+                # Playwright greps project/file/title together. Always run the exact current stock inventory.
+                browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts',
+                                   '--grep', journey_pattern(selected)]
+                command(browser_command, output / 'journeys.log', cwd=studio_product, env=browser_env)
                 report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected, composition)
         report['hostExitCodes'] = {key: process.returncode for key, process in owned_processes.items()}
         report['ownedRootRemoved'] = not data.exists()
@@ -1090,7 +1155,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
         if fixture_built:
             try:
                 command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=false', '-m:1', '-nr:false', '-v:q', '-nologo'], output / 'fixture-cleanup-build.log')
-                dll = backend_project.parent / 'bin/Debug/net10.0/Elsa.Workbench.dll'
+                dll = backend_project.parent / 'bin/Debug/net10.0/Elsa.Workbench.Host.dll'
                 markers = ('DashboardQualificationBootstrap', 'QualificationPrincipals', 'DashboardQualificationServiceExclusions', 'ActivityDataSelectionProof')
                 marker_absence = {marker: marker.encode() not in dll.read_bytes() and marker.encode('utf-16-le') not in dll.read_bytes() for marker in markers}
                 if not all(marker_absence.values()):
@@ -1114,7 +1179,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--studio-root', type=Path, help='Optional clean committed Studio checkout; both frontend/backend revisions are recorded and fenced')
-    parser.add_argument('--journey', action='append', choices=sorted(JOURNEYS), help='Repeat for exact complete journeys across every project that owns them; default requires every normal journey')
+    parser.add_argument('--journey', action='append', choices=sorted(JOURNEYS), help='Repeat for exact complete journeys across every project that owns them; default requires every stock Workbench journey')
     parser.add_argument('--composition', choices=sorted(COMPOSITIONS), default='normal', help='Owned activity-data host composition; nonnormal modes require explicit journeys')
     args = parser.parse_args()
     def terminate(_signum, _frame):

@@ -2,20 +2,22 @@
 
 `Test-BpmnBroadcastRecovery.ps1` creates its own fresh SQLite content root and loopback port. It wraps the actual selected source store and resume dispatcher solely to identify and pause at a completed provider/dispatcher call. The committed source/cohort and actor checkpoints remain the authority. Only processes created by the runner are terminated.
 
+Run these commands in the matching [pinned classic Workbench checkout](../../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-delivery-inspection-and-recovery-probes). The probe requires the archived classic runtime and direct BPMN host.
+
 Build two separate Workbench outputs outside the checkout. The fault feature is absent from the standard build; the runner verifies assembly metadata and binds the source files, host/reader dependency manifests and their hashes before/after execution.
 
 ```powershell
 $probe = '/absolute/private/probe'
 $normal = '/absolute/private/normal'
-dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release --artifacts-path $probe -p:ElsaBpmnRecoveryProbe=true -p:RestoreLockedMode=true
-dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release --artifacts-path $normal -p:ElsaBpmnRecoveryProbe=false -p:RestoreLockedMode=true
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release --artifacts-path $probe -p:ElsaBpmnRecoveryProbe=true -p:RestoreLockedMode=true
+dotnet build server/apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release --artifacts-path $normal -p:ElsaBpmnRecoveryProbe=false -p:RestoreLockedMode=true
 dotnet build tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj -p:RestoreLockedMode=true
 ./e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1 `
-  -ProbeAssembly "$probe/bin/Elsa.Workbench/release/Elsa.Workbench.dll" `
-  -NormalAssembly "$normal/bin/Elsa.Workbench/release/Elsa.Workbench.dll" `
+  -ProbeAssembly "$probe/bin/Elsa.Workbench.Host/release/Elsa.Workbench.Host.dll" `
+  -NormalAssembly "$normal/bin/Elsa.Workbench.Host/release/Elsa.Workbench.Host.dll" `
   -ReaderAssembly tools/bpmn/DeliveryRecoveryRead/bin/Debug/net10.0/DeliveryRecoveryRead.dll `
   -EvidencePath /absolute/private/recovery.json `
-  -SourceRevision "$(git rev-parse HEAD)+explicit-candidate-worktree"
+  -SourceRevision "$(git -c core.fsmonitor=false rev-parse HEAD)+explicit-candidate-worktree"
 ```
 
 Use `-Phase after-resume` for partial callback/rearm recovery. Both signal-catch branches self-loop. The source router pauses after accepting its first saved resume, but the runner waits for the actual child to complete and the same authored listener to persist a distinct new wait. Before killing, checked state must show that completed callback, its new physical generation, the other original recipient still suspended, and the original keyed start already parked. Standard-host retry must leave the first rearm and completed attempt facts unchanged, execute exactly one resume attempt for the remaining original recipient, and leave its later wait too. The already parked keyed start and later listeners/binding must remain unchanged. This proves callback effects rather than treating a dispatch acknowledgment as completion.

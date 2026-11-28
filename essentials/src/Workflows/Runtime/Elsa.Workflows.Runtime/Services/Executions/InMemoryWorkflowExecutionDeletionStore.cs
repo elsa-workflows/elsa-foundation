@@ -137,7 +137,7 @@ public sealed class InMemoryWorkflowExecutionDeletionStore : IWorkflowExecutionD
             candidate,
             tokenIsValid,
             () => DeleteRunOwnedState(candidate.State.WorkflowExecutionId),
-            cancellationToken);
+            cancellationToken, canCleanup: () => _durableTimerStore!.CanDeleteForWorkflowExecution(candidate.State.WorkflowExecutionId, _checkpointState));
     }
 
     private void DeleteRunOwnedState(string workflowExecutionId)

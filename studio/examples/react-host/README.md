@@ -1,0 +1,76 @@
+# `@elsa-workflows/example-react-host`
+
+A minimal **Vite + React 19 + TypeScript** app that consumes all four published Studio
+packages outside `Elsa.Studio.Workbench.Host`. It proves the packages work in an ordinary host app.
+
+## What it shows
+
+| Section | Package | Demonstrates |
+| --- | --- | --- |
+| 1. Code editor | `@elsa-workflows/studio-code-editor` | `StudioCodeEditor` editing a JS snippet with `javaScriptLanguageAdapter` (lazy CodeMirror + fallback textarea + diagnostics). |
+| 2. UI primitives | `@elsa-workflows/studio-ui` | `Toolbar`, `Tabs`, `StatusChip`, `DataGrid` styled by the `--studio-*` design tokens. |
+| 3. Workflows module | `@elsa-workflows/studio-workflows` + `@elsa-workflows/studio-sdk` | Building an `ElsaStudioModuleApi` from SDK factories, calling `register(api)`, and rendering a registered route. |
+
+## Run it (in this monorepo)
+
+```bash
+pnpm --filter @elsa-workflows/example-react-host dev
+```
+
+The workspace deps resolve to the packages' raw TypeScript source, so Vite compiles them
+from source — that is intended for the example. `pnpm --filter … build` and `… test` also
+work (`test` passes with no tests).
+
+## Install in your own app (external consumer)
+
+```bash
+npm install @elsa-workflows/studio-ui @elsa-workflows/studio-code-editor \
+            @elsa-workflows/studio-sdk @elsa-workflows/studio-workflows
+```
+
+### Peer dependencies
+
+| Peer | Required by | Version |
+| --- | --- | --- |
+| `react`, `react-dom` | all four packages | `^18` or `^19` |
+| `@tanstack/react-query` | `@elsa-workflows/studio-workflows` | `^5` |
+| `@xyflow/react` | `@elsa-workflows/studio-workflows` (workflow canvas) | `^12` |
+
+### CSS imports
+
+```ts
+// Public defaults/components first; consumer theme overrides afterward.
+import "@elsa-workflows/studio-ui/styles.css";
+import "@elsa-workflows/studio-code-editor/style.css";
+import "./theme.css";
+
+// 3. The workflow module's styles (only if you use @elsa-workflows/studio-workflows).
+import "@xyflow/react/dist/style.css";
+import "@elsa-workflows/studio-workflows/style.css";
+```
+
+The same CSS subpaths work in the workspace and from published packages. Import
+`@elsa-workflows/studio-ui/styles.css` once for token defaults and component styles,
+then your theme overrides. The editor stylesheet is exported as
+`@elsa-workflows/studio-code-editor/style.css`. No copied component CSS is needed.
+
+## The stub module API
+
+`@elsa-workflows/studio-workflows`'s `register(api)` touches only:
+
+- `api.dialogs` — passed to the module's internal dialog wiring.
+- `api.notifications` — optional; captured for action results (moved, deleted, restored, …) on the
+  workflow definitions page. A host that does not provide it gets no action feedback there: the
+  module falls back to a no-op instead of an inline status line.
+- `api.featureAreas.add(...)` — registers one "Workflows" feature area with nav + routes.
+
+Registered route components then read `api.backend` / `api.ai` / editor registries at render
+time. `src/stubModuleApi.ts` builds a **real** `ElsaStudioModuleApi` from the SDK's exported
+factories (`createContributionRegistry`, `createAiContributionApi`, `createDialogController`,
+`createEndpointContext`) — nothing is faked. It mirrors what Elsa.Studio.Workbench.Host's own host does
+in `Client/src/app/registry.ts` (that host-assembly factory is intentionally not part of the
+published SDK surface).
+
+The rendered piece is the **"Workflow runs"** route (`/workflows/instances`), chosen because
+it has the fewest runtime requirements. It fetches from the backend at `http://localhost:5000`;
+with no backend running it renders its own error/empty state — the module still mounts.

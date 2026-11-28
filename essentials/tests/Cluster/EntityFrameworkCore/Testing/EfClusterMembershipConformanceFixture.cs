@@ -34,7 +34,6 @@ namespace Elsa.Cluster.EntityFrameworkCore.Testing;
 /// </remarks>
 public sealed class EfClusterMembershipConformanceFixture(EfClusterMembershipTestStore store) : IClusterMembershipConformanceFixture
 {
-    // After 2020: the runtime tier composes the distributed runtime on these clocks, and its identities need one.
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero));
     private readonly List<Member> _created = [];
     private readonly Dictionary<string, Member> _waiting = new(StringComparer.Ordinal);

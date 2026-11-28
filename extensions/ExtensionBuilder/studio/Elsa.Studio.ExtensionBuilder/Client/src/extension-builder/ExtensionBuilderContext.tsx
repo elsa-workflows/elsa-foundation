@@ -124,7 +124,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   const latestArtifact = activeBuild?.artifact ?? null;
   const canBuild = !!capabilities?.canBuild && !!selectedProject && !editorDirty && !isBuildRunning(activeBuild);
   const buildDisabledReason = !capabilities?.canBuild
-    ? "Requires canBuild"
+    ? "Building requires build permission"
     : !selectedProject
       ? "Add a project to this solution to build a package"
       : editorDirty

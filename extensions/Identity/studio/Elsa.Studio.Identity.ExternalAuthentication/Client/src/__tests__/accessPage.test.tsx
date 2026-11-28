@@ -37,8 +37,8 @@ function harness(options: { users?: IdentityUsers; links?: IdentityLinks; sessio
     setLinks: (next: IdentityLinks) => { links = next; }, setSessions: (next: IdentitySessions) => { sessions = next; } };
 }
 async function button(container: HTMLElement, text: string) {
-  await vi.waitFor(() => expect([...container.querySelectorAll("button")].some(item => item.textContent?.trim() === text)).toBe(true));
-  return [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text)!;
+  await vi.waitFor(() => expect([...container.querySelectorAll("button")].some(item => (item.getAttribute("aria-label") ?? item.textContent?.trim()) === text)).toBe(true));
+  return [...container.querySelectorAll("button")].find(item => (item.getAttribute("aria-label") ?? item.textContent?.trim()) === text)!;
 }
 function click(element: HTMLElement) { flushSync(() => element.click()); }
 function field(container: HTMLElement, text: string) {

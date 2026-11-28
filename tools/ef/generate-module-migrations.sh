@@ -82,11 +82,12 @@ build_tooling() {
 
 # Old migrations can stop the tooling from building, so find the matching sets by snapshot name
 # and delete them before the first build. Secrets keeps its historical chain.
+retained_history='^(Runtime|WorkflowsDesign)(Sqlite|SqlServer|PostgreSql|MySql)DbContext$'
 while IFS= read -r snapshot; do
   name="$(basename "$snapshot" ModelSnapshot.cs)"
   [[ "$name" =~ ^($filter)$ ]] || continue
   # #2898 retains real saved executions and their Design authoring. Preserve both histories in every mode.
-  [[ "$mode" == "incremental" || "$name" =~ ^(Runtime|WorkflowsDesign)(Sqlite|SqlServer|PostgreSql|MySql)DbContext$ ]] && continue
+  [[ "$mode" == "incremental" || "$name" =~ $retained_history ]] && continue
   [[ "$snapshot" == */Secrets/* && "$name" != SecretsMySqlDbContext ]] && continue
   # ETL and Rules keep internal contexts and their own generators (tools/etl, tools/rules); this tool never builds them.
   [[ "$snapshot" == extensions/Etl/* || "$snapshot" == extensions/Rules/* ]] && continue
@@ -109,7 +110,7 @@ for row in "${rows[@]}"; do
   IFS='|' read -r context provider assembly namespace <<<"$row"
   project="$(module_project "$assembly")"
   dir="$(dirname "$project")/$(output_dir "$context" "$provider" "$assembly")"
-  if [[ "$mode" != "incremental" && ( "$assembly" == "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" || "$assembly" == "Elsa.Workflows.Design.Persistence.EntityFrameworkCore" ) ]]; then
+  if [[ "$mode" != "incremental" && "$context" =~ $retained_history ]]; then
     echo "skip $context: retained Runtime/Design history requires the corresponding incremental mode"
     continue
   fi

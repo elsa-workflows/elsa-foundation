@@ -13,5 +13,5 @@ The exact version-1 site claims are consumer descriptor and overlay `elsa.graph-
 `elsa.activity-graph`, metadata `graph.templateHash` and `runtime.activityExecutionScope`. Unknown consumer/schema
 surfaces remain Unsupported. The inspector reads only qualified captured members through
 `IReleaseRuntimeSiteReader`; Runtime placement and CLR activity inspectors remain independently mandatory.
-Feature `ActivitiesGraphReleaseVerification` depends on `WorkflowReleaseRuntime` and `ActivitiesGraphRuntime`.
+Feature `ActivitiesGraphReleaseVerification` depends on `WorkflowReleaseRuntime` and `ActivitiesGraphRuntimeHosting`.
 The adapter's package references only Core contracts; its feature dependency does not load a compiler.

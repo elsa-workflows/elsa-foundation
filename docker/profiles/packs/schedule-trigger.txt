@@ -1,0 +1,2 @@
+# Built-in standalone scheduling activities and triggers.
+Elsa.Activities.Scheduling

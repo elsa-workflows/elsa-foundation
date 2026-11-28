@@ -1,0 +1,276 @@
+name: Studio Essentials profile qualification
+
+on:
+  workflow_call:
+    inputs:
+      packages_run_id:
+        description: 'Successful Studio Packages run for the exact commit selected for this dispatch.'
+        required: true
+        type: string
+      publish:
+        description: 'Profile qualification requires publish to be false.'
+        required: true
+        type: boolean
+      publish_candidate:
+        description: 'Authorize candidate publication after both architectures qualify.'
+        required: false
+        default: false
+        type: boolean
+    outputs:
+      producer_artifact_id:
+        value: ${{ jobs.source.outputs.artifact_id }}
+      producer_artifact_digest:
+        value: ${{ jobs.source.outputs.archive_digest }}
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  source:
+    name: Select the exact Studio package artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      artifact_id: ${{ steps.artifact.outputs.artifact_id }}
+      archive_digest: ${{ steps.artifact.outputs.archive_digest }}
+      run_number: ${{ steps.artifact.outputs.run_number }}
+      run_attempt: ${{ steps.artifact.outputs.run_attempt }}
+      head_branch: ${{ steps.artifact.outputs.head_branch }}
+    steps:
+      - name: Verify Studio Packages provenance and pin the artifact
+        id: artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.packages_run_id }}
+          PUBLISH: ${{ inputs.publish }}
+          PUBLISH_CANDIDATE: ${{ inputs.publish_candidate }}
+        run: |
+          set -euo pipefail
+          if [[ "$PUBLISH" == "true" ]]; then
+            echo "::error::Set publish to false for Studio Essentials profile qualification."
+            exit 1
+          fi
+          if [[ "$PUBLISH_CANDIDATE" == "true" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$GITHUB_REPOSITORY" != "elsa-workflows/elsa-foundation" || "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "::error::Studio profile candidates can be published only by a manual dispatch on main."
+              exit 1
+            fi
+          fi
+          if [[ ! "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::packages_run_id must be a numeric Actions run ID."
+            exit 1
+          fi
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")
+          if ! jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$GITHUB_SHA" '
+            .name == "Studio Packages (consolidated gated)" and
+            (.path | split("@")[0]) == ".github/workflows/studio-packages.yml" and
+            .head_repository.full_name == $repo and .head_sha == $sha and
+            .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success"
+          ' <<< "$run" >/dev/null; then
+            echo "::error::Choose a successful manual Studio Packages run from this repository at $GITHUB_SHA."
+            exit 1
+          fi
+
+          artifacts=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?name=elsa-foundation-studio-nuget-packages")
+          artifact=$(jq -ec --arg sha "$GITHUB_SHA" --arg run "$SOURCE_RUN_ID" '
+            [.artifacts[] | select(.name == "elsa-foundation-studio-nuget-packages" and
+              .expired == false and .workflow_run.head_sha == $sha and (.workflow_run.id | tostring) == $run and
+              (.digest // "" | test("^sha256:[0-9a-f]{64}$")))] |
+            if length == 1 then .[0] else error("Expected exactly one unexpired Studio package artifact with a SHA-256 digest") end
+          ' <<< "$artifacts")
+          {
+            echo "artifact_id=$(jq -r .id <<< "$artifact")"
+            echo "archive_digest=$(jq -r .digest <<< "$artifact")"
+            echo "run_number=$(jq -r .run_number <<< "$run")"
+            echo "run_attempt=$(jq -r .run_attempt <<< "$run")"
+            echo "head_branch=$(jq -r .head_branch <<< "$run")"
+          } >> "$GITHUB_OUTPUT"
+
+  qualify:
+    name: Qualify Studio Essentials on ${{ matrix.arch }}
+    needs: source
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            machine: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            machine: aarch64
+    runs-on: ${{ matrix.runner }}
+    env:
+      ARCH: ${{ matrix.arch }}
+      MACHINE: ${{ matrix.machine }}
+      SOURCE_RUN_ID: ${{ inputs.packages_run_id }}
+      SOURCE_ARTIFACT_ID: ${{ needs.source.outputs.artifact_id }}
+      SOURCE_ARCHIVE_DIGEST: ${{ needs.source.outputs.archive_digest }}
+      SOURCE_RUN_NUMBER: ${{ needs.source.outputs.run_number }}
+      SOURCE_RUN_ATTEMPT: ${{ needs.source.outputs.run_attempt }}
+      SOURCE_HEAD_BRANCH: ${{ needs.source.outputs.head_branch }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Require the native runner and image builder
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "$MACHINE"
+          test "$(docker info --format '{{.Architecture}}')" = "$MACHINE"
+          docker buildx version
+          {
+            echo "PACKAGES=$RUNNER_TEMP/studio-profile-packages"
+            echo "BUNDLE=$RUNNER_TEMP/studio-profile-result"
+            echo "FOUNDATION_IMAGE=elsa-studio-foundation:qualification-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ARCH"
+            echo "PROFILE_IMAGE=elsa-studio-essentials:qualification-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ARCH"
+          } >> "$GITHUB_ENV"
+
+      - name: Download the immutable official Studio package artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          download="$RUNNER_TEMP/studio-profile-packages.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$SOURCE_ARTIFACT_ID/zip" > "$download"
+          printf '%s  %s\n' "${SOURCE_ARCHIVE_DIGEST#sha256:}" "$download" | sha256sum --check --strict
+          unzip -q "$download" -d "$PACKAGES"
+
+      - name: Verify the package set and its source receipt
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          manifest="$PACKAGES/studio-package-build.json"
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$GITHUB_SHA" --arg source_run "$SOURCE_RUN_ID" \
+            --argjson run_number "$SOURCE_RUN_NUMBER" --arg branch "$SOURCE_HEAD_BRANCH" '
+            .repository == $repo and .workflow == "Studio Packages (consolidated gated)" and
+            .commit == $sha and .run_id == $source_run and .run_number == $run_number and
+            (.ref == ("refs/heads/" + $branch) or .ref == ("refs/tags/" + $branch))
+          ' "$manifest" >/dev/null
+          VERSION=$(jq -er '.version | select(test("^[0-9]+(\\.[0-9]+){2,3}(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$"))' "$manifest")
+          python3 - "$PACKAGES" "$VERSION" <<'PY'
+          from pathlib import Path
+          import sys
+
+          sys.path.insert(0, "tools/ci")
+          from verify_studio_nuget_packages import verify_packages
+
+          # The producer verified its assets against its build. The next command
+          # verifies the transferred archive hashes and embedded frontend inventories.
+          packages = verify_packages(Path.cwd(), Path(sys.argv[1]), sys.argv[2], verify_payload=False)
+          print(f"Verified {len(packages)} official Studio package identities.")
+          PY
+          VERSION="$VERSION" GITHUB_RUN_ID="$SOURCE_RUN_ID" GITHUB_RUN_ATTEMPT="$SOURCE_RUN_ATTEMPT" \
+            python3 tools/versioning/package-evidence/studio_archives.py "$PACKAGES" --check nuget
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: studio/package.json
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: studio/pnpm-lock.yaml
+
+      - name: Generate the Foundation frontend assets from the selected source
+        working-directory: studio
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Verify the generated browser assets
+        run: python3 tools/ci/verify-studio-assets.py
+
+      - name: Build the native Foundation and derived profile images
+        run: |
+          set -euo pipefail
+          mkdir -p "$BUNDLE/qualification" "$BUNDLE/fixtures"
+          cp "$PACKAGES/nuget-subjects.json" "$PACKAGES/studio-package-build.json" "$BUNDLE/"
+          etl=$(jq -er '.[] | select(.id == "Elsa.Studio.Etl") | .name' "$PACKAGES/nuget-subjects.json")
+          cp "$PACKAGES/$etl" "$BUNDLE/fixtures/"
+          echo "ETL_ARCHIVE=$BUNDLE/fixtures/$etl" >> "$GITHUB_ENV"
+          python3 studio/docker/profiles/essentials/prepare.py "$PACKAGES" --version "$VERSION" --output "$BUNDLE/context"
+          cp studio/docker/profiles/essentials/smoke.py "$BUNDLE/"
+          options=(--load --provenance=false --platform "linux/$ARCH" --progress plain
+            --label "org.opencontainers.image.revision=$GITHUB_SHA"
+            --label "org.opencontainers.image.version=$VERSION")
+          docker buildx build "${options[@]}" --metadata-file "$BUNDLE/foundation-metadata.json" \
+            --build-arg "STUDIO_VERSION=$VERSION" \
+            -f studio/src/apps/Elsa.Studio.Foundation.Host/Dockerfile -t "$FOUNDATION_IMAGE" . \
+            2>&1 | tee "$RUNNER_TEMP/studio-profile-foundation-build.log"
+          docker buildx build "${options[@]}" --metadata-file "$BUNDLE/profile-metadata.json" --network none \
+            --build-arg "FOUNDATION_IMAGE=$FOUNDATION_IMAGE" -t "$PROFILE_IMAGE" "$BUNDLE/context" \
+            2>&1 | tee "$RUNNER_TEMP/studio-profile-derived-build.log"
+          for image in "$FOUNDATION_IMAGE" "$PROFILE_IMAGE"; do
+            test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" = "linux/$ARCH"
+          done
+
+      - name: Qualify default auth and the ETL add-on with networking disabled
+        run: |
+          python3 "$BUNDLE/smoke.py" "$PROFILE_IMAGE" --context "$BUNDLE/context" \
+            --etl "$ETL_ARCHIVE" --output "$BUNDLE/qualification"
+
+      - name: Export the exact tested images and replay checksums
+        run: |
+          set -euo pipefail
+          cd "$BUNDLE"
+          foundation_id=$(docker image inspect --format '{{.Id}}' "$FOUNDATION_IMAGE")
+          profile_id=$(docker image inspect --format '{{.Id}}' "$PROFILE_IMAGE")
+          foundation_digest=$(jq -er '."containerimage.digest" | select(test("^sha256:[0-9a-f]{64}$"))' foundation-metadata.json)
+          profile_digest=$(jq -er '."containerimage.digest" | select(test("^sha256:[0-9a-f]{64}$"))' profile-metadata.json)
+          test "$(jq -er .imageId qualification/smoke.json)" = "$profile_id"
+          docker image save "$FOUNDATION_IMAGE" "$PROFILE_IMAGE" | gzip -n > images.tar.gz
+          jq -n --arg repository "$GITHUB_REPOSITORY" --arg sourceCommit "$GITHUB_SHA" \
+            --arg version "$VERSION" --arg platform "linux/$ARCH" --arg producerRun "$SOURCE_RUN_ID" \
+            --arg producerArtifactId "$SOURCE_ARTIFACT_ID" --arg producerArtifactDigest "$SOURCE_ARCHIVE_DIGEST" \
+            --arg foundationImage "$FOUNDATION_IMAGE" --arg foundationImageId "$foundation_id" \
+            --arg profileImage "$PROFILE_IMAGE" --arg profileImageId "$profile_id" \
+            --arg foundationDigest "$foundation_digest" --arg profileDigest "$profile_digest" \
+            '{repository:$repository, sourceCommit:$sourceCommit, version:$version, platform:$platform,
+              producerRun:$producerRun, producerArtifactId:$producerArtifactId, producerArtifactDigest:$producerArtifactDigest,
+              foundationImage:$foundationImage, foundationImageId:$foundationImageId, foundationDigest:$foundationDigest,
+              profileImage:$profileImage, profileImageId:$profileImageId, profileDigest:$profileDigest}' > build.json
+          find . -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/studio-profile-SHA256SUMS"
+          mv "$RUNNER_TEMP/studio-profile-SHA256SUMS" SHA256SUMS
+
+      - name: Upload the tested Studio profile bundle
+        id: bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-essentials-profile-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/studio-profile-result/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record the tested artifact and image digests
+        env:
+          ARTIFACT_URL: ${{ steps.bundle.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.bundle.outputs.artifact-digest }}
+        run: |
+          {
+            echo "Studio Essentials profile qualified on linux/$ARCH at $GITHUB_SHA."
+            echo
+            echo "Artifact: $ARTIFACT_URL"
+            echo "Artifact SHA-256: $ARTIFACT_DIGEST"
+            echo
+            echo '~~~json'
+            cat "$BUNDLE/build.json"
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain diagnostics from an unsuccessful build
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: studio-essentials-profile-diagnostics-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/studio-profile-*-build.log
+            ${{ runner.temp }}/studio-profile-result/qualification/
+          retention-days: 7

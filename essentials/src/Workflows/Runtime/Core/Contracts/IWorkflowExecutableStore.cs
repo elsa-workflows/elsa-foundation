@@ -48,6 +48,15 @@ public interface IWorkflowExecutableStore
     /// the selected store, preserving cache invalidation and other decorator behavior. This is not independent authority.</remarks>
     IWorkflowExecutableStore GetMaterialStore() => this;
 
+    /// <summary>Lists backend-owned executable roots that must be retained by a guarded collector.</summary>
+    ValueTask<IReadOnlyCollection<string>> ListMaterialRetentionRootIdsAsync(CancellationToken cancellationToken = default)
+    {
+        var material = GetMaterialStore();
+        return ReferenceEquals(this, material)
+            ? ValueTask.FromResult<IReadOnlyCollection<string>>([])
+            : material.ListMaterialRetentionRootIdsAsync(cancellationToken);
+    }
+
     /// <summary>Saves the artifact. Idempotent by <c>ArtifactId</c>: an existing artifact is left untouched.</summary>
     ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default);
 

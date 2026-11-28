@@ -19,7 +19,7 @@ The opportunity is to turn the existing investment into a dependable product sur
 - **Host operator**: composes language modules, permissions and policy and needs degraded states to describe the actual deployment.
 - **Support and release engineer**: needs reproducible current-head evidence that Studio and Foundation work together.
 
-Canonical terms remain in the Studio [`CONTEXT.md`](../../../Studio/CONTEXT.md); this PRD does not redefine them.
+Canonical terms remain in the Studio [`CONTEXT.md`](../../../studio/CONTEXT.md); this PRD does not redefine them.
 
 ## Primary journeys
 
@@ -75,7 +75,7 @@ The author can use completion, hover, signatures, explicit formatting, keyboard 
 ## Constraints
 
 - Retain CodeMirror behind the existing engine-neutral contract.
-- Retain Studio ADRs [0002](../../../Studio/docs/adr/0002-keep-expression-specific-support-in-expression-modules.md) and [0006](../../../Studio/docs/adr/0006-keep-code-editing-as-internal-studio-infrastructure.md).
+- Retain Studio ADRs [0002](../../../studio/docs/adr/0002-keep-expression-specific-support-in-expression-modules.md) and [0006](../../../studio/docs/adr/0006-keep-code-editing-as-internal-studio-infrastructure.md).
 - Reconcile and extend Studio spec 094 and Foundation spec 143 instead of creating competing baselines.
 - The deeper JavaScript language-service choice requires a bounded spike before adoption.
 

@@ -17,8 +17,9 @@ public sealed class DurableTimerPumpOptions
     public TimeSpan MaxBackoffInterval { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
-    /// Hard cap on due timers loaded and dispatched per sweep, bounding both the store scan and the
-    /// dispatch burst.
+    /// Hard cap on due timers returned and attempted per persistence scope per sweep (1–500).
+    /// History-capable list/delete owners traverse one keyset page per tick, advancing past parked
+    /// prefixes without increasing this limit. The provider controls its underlying scan.
     /// </summary>
     public int MaxTimersPerTick { get; set; } = 100;
 

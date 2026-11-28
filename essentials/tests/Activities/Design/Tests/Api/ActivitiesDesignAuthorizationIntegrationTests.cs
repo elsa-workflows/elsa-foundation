@@ -47,6 +47,38 @@ public sealed class ActivitiesDesignAuthorizationIntegrationTests
     }
 
     [Fact]
+    public async Task Activity_definition_archive_requires_manage_before_dispatch()
+    {
+        await using var host = await ActivitiesDesignAuthorizationHost.StartAsync();
+        host.Observations.Reset();
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "/design/activities/definitions/definition-1");
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignAuthorizationHost.IdentityHeader, "exact");
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignAuthorizationHost.TenantHeader, "tenant-a");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Contains(ActivityDesignPermissions.Manage, host.Observations.EvaluatedPermissions, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(0, host.Observations.CommandSenderCalls);
+    }
+
+    [Fact]
+    public async Task Activity_definition_archive_rejects_tenant_mismatch_before_dispatch()
+    {
+        await using var host = await ActivitiesDesignAuthorizationHost.StartAsync();
+        host.Observations.Reset();
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "/design/activities/definitions/definition-1");
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignAuthorizationHost.IdentityHeader, "manage");
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignAuthorizationHost.TenantHeader, "tenant-b");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.True(host.Observations.ResourceCalls > 0);
+        Assert.Equal(0, host.Observations.CommandSenderCalls);
+    }
+
+    [Fact]
     public async Task Replacement_evaluator_is_used_by_the_real_Minimal_host()
     {
         await using var host = await ActivitiesDesignAuthorizationHost.StartAsync();

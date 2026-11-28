@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- NativeExecutableMapper's checks: compiled executables, built as publishing compiles them, mapped onto the Native
+       model and through published Actor runs. Coordinator cases use the in-memory publication stores. -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="../../../../../src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/PreparedSchedules/Elsa.Workflows.Runtime.PreparedSchedules.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelHosting/Elsa.Workflows.Runtime.KernelHosting.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Persistence/Standalone/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Api/StandaloneTriggers/Elsa.Workflows.Runtime.Api.StandaloneTriggers.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <ProjectReference Include="../../../../ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
+    <ProjectReference Include="../../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Publications/Elsa.Workflows.Runtime.Publications.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Http/src/Elsa.Http/Elsa.Http.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Http/src/Activities/Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Connections/src/Workflows/Elsa.Connections.Workflows.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Secrets/src/Elsa.Secrets/Elsa.Secrets.csproj" />
+  </ItemGroup>
+</Project>

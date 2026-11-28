@@ -386,7 +386,7 @@ public sealed partial class RetiredTermEnforcementGuardTests
         string[] exempt = exemptAnalyzerAndGuards ? ["essentials/build/Analyzers/", "essentials/tests/Architecture/"] : [];
 
         return Directory.EnumerateFiles(repoRoot, "*.*", SearchOption.TopDirectoryOnly)
-            .Concat(new[] { "essentials", "extensions", "apps" }
+            .Concat(new[] { "essentials", "server", "extensions" }
                 .Select(root => Path.Join(repoRoot, root))
                 .Where(Directory.Exists)
                 .SelectMany(root => Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)))

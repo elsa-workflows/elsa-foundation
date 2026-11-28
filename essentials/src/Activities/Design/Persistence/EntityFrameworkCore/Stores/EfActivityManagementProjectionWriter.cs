@@ -220,7 +220,7 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
             Category = current.Category, DisplayName = current.DisplayName, Description = current.Description, ContentAuthority = current.ContentAuthority, ContentAuthorityKind = current.ContentAuthorityKind,
             HeadVersionId = current.HeadVersionId, RecommendedVersionId = current.RecommendedVersionId, Head = current.Head, Recommendation = current.Recommendation,
             HeadProviderKey = current.HeadProviderKey, RecommendationProviderKey = current.RecommendationProviderKey,
-            DraftCount = await CountDraftsAsync(definitionId, current.TenantId, token), VersionCount = await CountVersionsAsync(definitionId, current.TenantId, token), UpdatedAt = current.UpdatedAt, CreatedAt = current.CreatedAt, LastModifiedAt = changedAt
+            DraftCount = await CountDraftsAsync(definitionId, current.TenantId, token), VersionCount = await CountVersionsAsync(definitionId, current.TenantId, token), UpdatedAt = current.UpdatedAt, ArchivedAt = current.ArchivedAt, CreatedAt = current.CreatedAt, LastModifiedAt = changedAt
         });
     }
 
@@ -241,7 +241,7 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
         Head = head is null ? null : ToReference(head), Recommendation = recommendation is null ? null : ToReference(recommendation),
         HeadProviderKey = head?.Provider.ProviderKey, RecommendationProviderKey = recommendation?.Provider.ProviderKey,
         DraftCount = await CountDraftsAsync(change.Definition.Id, change.Definition.TenantId, token), VersionCount = await CountVersionsAsync(change.Definition.Id, change.Definition.TenantId, token),
-        UpdatedAt = change.Definition.LastModifiedAt, CreatedAt = change.Definition.CreatedAt, LastModifiedAt = changedAt
+        UpdatedAt = change.Definition.LastModifiedAt, ArchivedAt = change.Authoring.ArchivedAt, CreatedAt = change.Definition.CreatedAt, LastModifiedAt = changedAt
     };
     }
 

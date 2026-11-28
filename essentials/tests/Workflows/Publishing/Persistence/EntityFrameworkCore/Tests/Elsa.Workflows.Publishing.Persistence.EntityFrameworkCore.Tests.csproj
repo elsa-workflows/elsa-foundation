@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../../Api/Tests/Support/UnobservedTestRunStore.cs" Link="UnobservedTestRunStore.cs" />
+    <Compile Include="../../../Api/Tests/Support/ActivationSwitchDecoration.cs" Link="ActivationSwitchDecoration.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
@@ -27,9 +31,8 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <!-- Material lifecycle tests prepare both serving projections with the ordinary scheduling decorator. -->
-    <ProjectReference Include="../../../../../../src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="../../../../../../src/Workflows/Runtime/Persistence/Artifacts/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../src/Workflows/Runtime/PreparedSchedules/Elsa.Workflows.Runtime.PreparedSchedules.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />

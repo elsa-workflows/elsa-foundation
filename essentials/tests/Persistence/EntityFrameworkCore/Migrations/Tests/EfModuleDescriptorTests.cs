@@ -19,7 +19,6 @@ using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 using Xunit;
@@ -54,8 +53,6 @@ public sealed class EfModuleDescriptorTests
         ("Workflows.Runtime", typeof(RuntimeDbContext), RuntimeEfModule.HistoryModuleName),
         ("Workflows.Design", typeof(WorkflowsDesignDbContext), WorkflowsDesignEfModule.HistoryModuleName),
         ("Workflows.Publishing", typeof(PublishingSnapshotReviewDbContext), PublishingSnapshotReviewEfModule.HistoryModuleName),
-        ("Workflows.Runtime.Distributed.Placement", typeof(ExecutionPlacementDbContext), ExecutionPlacementEfModule.HistoryModuleName),
-        ("Workflows.Runtime.Distributed.CommandTransport", typeof(ExecutionCommandTransportDbContext), ExecutionCommandTransportEfModule.HistoryModuleName),
         ("Activities.Design", typeof(ActivitiesDesignDbContext), ActivitiesDesignEfModule.HistoryModuleName),
         ("Identity.Iam", typeof(IdentityIamDbContext), IdentityIamEfModule.HistoryModuleName),
         ("Identity.ProviderConfiguration", typeof(IdentityProviderConfigurationDbContext), IdentityProviderConfigurationEfModule.HistoryModuleName),
@@ -71,10 +68,10 @@ public sealed class EfModuleDescriptorTests
     private static IReadOnlyList<EfModuleDescriptor> Discover() => EfModuleCatalog.Discover(ModuleContextCatalog.Modules);
 
     [Fact]
-    public void Discover_returns_all_19_modules_with_correct_names_contexts_and_frozen_history()
+    public void Discover_returns_all_expected_modules_with_correct_names_contexts_and_frozen_history()
     {
         var descriptors = Discover();
-        Assert.Equal(19, descriptors.Count);
+        Assert.Equal(Expected.Length, descriptors.Count);
 
         foreach (var (name, context, historyModule) in Expected)
         {
@@ -162,7 +159,7 @@ public sealed class EfModuleDescriptorTests
             .ToHashSet(StringComparer.Ordinal);
 
     // One project directory per module assembly (thirteen module projects carry fifteen
-    // [EfModule] declarations; Identity and Workflows.Runtime.Distributed each carry two in one project).
+    // [EfModule] declarations; Identity carries two in one project).
     // Repo-relative, not derived from the assembly's bin/obj output path, for the same reason
     // SecretsEfPersistencePilotArchitectureTests reads project files from the repo rather than from disk
     // layout: it is the source, not the build output, that a guard test must hold to account.
@@ -171,19 +168,18 @@ public sealed class EfModuleDescriptorTests
         (typeof(ActivitiesDesignDbContext).Assembly, "essentials/src/Activities/Design/Persistence/EntityFrameworkCore"),
         (typeof(WeaverDbContext).Assembly, "extensions/Weaver/src/Persistence/EntityFrameworkCore"),
         (typeof(ClusterMembershipDbContext).Assembly, "essentials/src/Cluster/EntityFrameworkCore"),
-        (typeof(ConnectionsDbContext).Assembly, "essentials/src/Connections/Persistence/EntityFrameworkCore"),
+        (typeof(ConnectionsDbContext).Assembly, "extensions/Connections/src/Persistence/EntityFrameworkCore"),
         (typeof(AgentDbContext).Assembly, "extensions/Agent/src/Persistence/EntityFrameworkCore"),
         (typeof(DataProtectionKeysDbContext).Assembly, "essentials/src/Foundation/DataProtection/EntityFrameworkCore"),
-        (typeof(EfOpenTelemetryDbContext).Assembly, "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore"),
-        (typeof(StructuredLogsDbContext).Assembly, "essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore"),
+        (typeof(EfOpenTelemetryDbContext).Assembly, "extensions/Diagnostics.OpenTelemetry/src/Persistence/EntityFrameworkCore"),
+        (typeof(StructuredLogsDbContext).Assembly, "extensions/Diagnostics.StructuredLogs/src/Persistence/EntityFrameworkCore"),
         (typeof(IdentityIamDbContext).Assembly, "essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore"),
-        (typeof(ExternalAuthenticationDbContext).Assembly, "essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore"),
-        (typeof(SecretsDbContext).Assembly, "essentials/src/Secrets/Persistence/EntityFrameworkCore"),
-        (typeof(StudioPreferencesDbContext).Assembly, "essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore"),
+        (typeof(ExternalAuthenticationDbContext).Assembly, "extensions/Identity/src/Persistence/EntityFrameworkCore"),
+        (typeof(SecretsDbContext).Assembly, "extensions/Secrets/src/Persistence/EntityFrameworkCore"),
+        (typeof(StudioPreferencesDbContext).Assembly, "essentials/src/Preferences/Persistence/EntityFrameworkCore"),
         (typeof(WorkflowsDesignDbContext).Assembly, "essentials/src/Workflows/Design/Persistence/EntityFrameworkCore"),
         (typeof(PublishingSnapshotReviewDbContext).Assembly, "essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore"),
-        (typeof(ExecutionPlacementDbContext).Assembly, "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore"),
-        (typeof(RuntimeDbContext).Assembly, "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore"),
+        (typeof(RuntimeDbContext).Assembly, "essentials/src/Workflows/Runtime/Persistence/Schema/EntityFrameworkCore"),
         (typeof(Elsa3ImportDbContext).Assembly, "extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore")
     ];
 
@@ -331,12 +327,12 @@ public sealed class EfModuleDescriptorTests
     [Fact]
     public void The_two_context_free_ef_projects_declare_no_module()
     {
-        var dashboard = typeof(WorkflowsDashboardEntityFrameworkCoreFeature).Assembly;
+        var dashboard = typeof(WorkflowsDashboardPortfolioEntityFrameworkCoreFeature).Assembly;
         var aspNetCoreIdentity = typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly;
 
         var descriptors = EfModuleCatalog.Discover(ModuleContextCatalog.Modules.Append(dashboard).Append(aspNetCoreIdentity).Distinct());
 
-        Assert.Equal(19, descriptors.Count);
+        Assert.Equal(Expected.Length, descriptors.Count);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == dashboard);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == aspNetCoreIdentity);
     }

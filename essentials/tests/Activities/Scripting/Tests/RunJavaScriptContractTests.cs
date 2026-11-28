@@ -4,7 +4,6 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Scripting.Activities;
 using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Xunit;
 
 namespace Elsa.Activities.Scripting.Tests;
@@ -36,13 +35,9 @@ public sealed class RunJavaScriptContractTests
             Script = "return { total: args.amount * 2 };",
             Arguments = JsonSerializer.SerializeToElement(new { amount = 21 })
         };
-        var context = new SimpleActivityExecutionContext(
-            activity,
-            CancellationToken.None,
-            invocationId: "invocation-1",
-            executableNodeId: "script-node");
+        var context = new ActivityExecutionContext("workflow-1", "invocation-1", "attempt-1", "script-node", CancellationToken.None);
 
-        var transition = await ((IActivity)activity).ExecuteAsync(context.ToActivityExecutionContext());
+        var transition = await ((IActivity)activity).ExecuteAsync(context);
 
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<RunJavaScriptResult>>(transition);
         Assert.Equal(42, completion.Result.Value!.Value.GetProperty("total").GetInt32());

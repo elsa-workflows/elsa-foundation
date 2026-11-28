@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceWhenActive,
   type StudioDialogApi, type StudioEndpointContext, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StatusChip, StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { StudioAlert, CopyableIdentifier, StatusChip, StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { ConnectionEditor, emptyDocument } from "./ConnectionEditor";
 import { connectionChanges, ExternalAuthenticationClient, ExternalAuthenticationClientError, externalAuthenticationError,
   type ConnectionCatalog, type ConnectionCommand, type ConnectionDocument, type ConnectionPreview, type ConnectionTest, type ConnectionView, type Readiness } from "./sdk";
@@ -206,7 +206,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   }
   async function save(document: ConnectionDocument) {
     if (!visible) return;
-    await change({ change: creating ? connectionChanges.create : connectionChanges.update, expectedRevision: visible.revision, record: document }, creating ? "Save draft" : "Save changes");
+    await change({ change: creating ? connectionChanges.create : connectionChanges.update, expectedRevision: visible.revision, record: document }, "Save");
   }
   async function testConnection() {
     if (!selected || !visible || dirty || needsRefresh || loading || busyRef.current) return;
@@ -255,8 +255,9 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
 
   return <StudioPage className="external-auth-shell">
     <StudioPageHeader title="External sign-in" headingLevel={2} description="Connect identity providers while Elsa keeps control of its users, roles and permissions."
-      actions={<><StudioButton onClick={() => { void refresh(); }} disabled={pending}>Refresh</StudioButton><StudioButton variant="primary" disabled={!writable || locked} onClick={() => { void create(); }}>Add connection</StudioButton></>} />
-    {error ? <div ref={feedback.errorRef} tabIndex={-1} role="alert" className="external-auth-error">{error}{needsRefresh ? " Refresh connections before another change." : ""}<StudioButton disabled={pending} onClick={() => { void refresh(); }}>Refresh connections</StudioButton></div> : null}
+      refresh={{ id: "external-connections", label: "Refresh external connections", onRefresh: refresh, refreshing: loading, disabled: Boolean(busy), autoRefresh: !creating && !selected && !dirty && !needsRefresh }}
+      actions={<StudioButton variant="primary" disabled={!writable || locked} onClick={() => { void create(); }}>Add connection</StudioButton>} />
+    {error ? <StudioAlert tone="danger" ref={feedback.errorRef} tabIndex={-1}>{error}{needsRefresh ? " Refresh connections before another change." : ""}<StudioButton disabled={pending} onClick={() => { void refresh(); }}>Refresh connections</StudioButton></StudioAlert> : null}
     {notice ? <p ref={feedback.noticeRef} tabIndex={-1} role="status" className="external-auth-notice">{notice}</p> : null}
     {busy ? <p role="status">{busy}…</p> : null}
     {loading && !visible ? <p role="status">Loading external sign-in connections…</p> : null}

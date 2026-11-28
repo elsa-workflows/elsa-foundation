@@ -136,6 +136,18 @@ carries EF "for cluster membership only", which no longer holds. Features still 
 - **Nothing else changes.** The module carries exactly the EF closure membership carries, so the host's reviewed EF
   package closure in `EfCoreDependencyGuardTests` is unchanged, and the module adds no shared assembly.
 
+## Amended — 2026-11-26: Foundation may compose the OpenIddict token store
+
+Sipke Schoorstra approved the opt-in store during the #5800 Essentials Docker profile delivery. Foundation carries the
+existing `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` provider and registers it when
+`Elsa:Identity:OpenIddict:EntityFrameworkCore:Enabled` is true. One root container owns migration and pruning.
+All shells use the same token store, and several hosts may point their stores at the same database.
+
+The provider uses the shared identity options in `Elsa.Foundation.Identity.Core`. The OpenIddict feature and
+its behavior assembly arrive from the package feed. The host shares the vendor's Core and Abstractions
+assemblies and the IdentityModel token contracts they expose. A loaded feature resolves the same managers,
+options and signing-key types as the host's EF store.
+
 ## Context
 
 Inventory snapshot: `main` at `43d88cef44844e9f0153f222656189bc929abeb1`.

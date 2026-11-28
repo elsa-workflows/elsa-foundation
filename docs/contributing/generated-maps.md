@@ -69,12 +69,12 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 
 `-- check` regenerates the solution filters into a scratch directory and byte-compares them with the committed
 `Elsa.Server.*.slnf` files, the only generated files left on `main`; it is the same check as
-`-- solution-filters-check`. When it is red, run `-- solution-filters` and commit the filters. The required
-`Generated maps fresh` job runs the filter check on every pull request and every push to `main`, together with the
-generator self-tests. The dependency map and the documentation maps have no freshness check, because none is
-committed: the calculator derives the dataset per commit, the branch copy describes the commit its trailer names, and
-a local run describes your working tree. A tree the scan cannot read, such as a stale lock file, fails
-`DependencyMapTests` in `Build & test` on the pull request rather than the publish on `main`.
+`-- solution-filters-check`. When it is red, run `-- solution-filters` and commit the filters. The `Generated maps`
+job runs the filter check on every pull request and every push to `main`, together with the generator self-tests, and
+the required `Build & test` check fails on a pull request when it does. The dependency map and the documentation
+maps are generated from the source tree. The calculator derives the dataset per commit, the published branch describes
+the commit named in its trailer, and a local run describes your working tree. If the scan cannot read a tree, such as
+when a lock file is stale, `DependencyMapTests` fails in the pull request's `Build & test` check.
 
 ## Findings reports
 

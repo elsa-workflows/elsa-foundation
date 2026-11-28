@@ -3,8 +3,6 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Services;
-using Elsa.Activities.Runtime.Tasks;
-using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
@@ -29,20 +27,17 @@ public class ActivitiesRuntimeFeature : Elsa.Events.EventsFeature
     private static readonly RuntimeHistorySourceSupport ContinuationSources = new([
         RuntimeHistorySourceFactKind.ActivityContinuationStarted, RuntimeHistorySourceFactKind.ActivityContinuationReturned,
         RuntimeHistorySourceFactKind.ActivityContinuationSuspended, RuntimeHistorySourceFactKind.ActivityContinuationCompleted,
-        RuntimeHistorySourceFactKind.ActivityContinuationFaulted, RuntimeHistorySourceFactKind.ActivityContinuationCancelled]);
+        RuntimeHistorySourceFactKind.ActivityContinuationFaulted, RuntimeHistorySourceFactKind.ActivityContinuationCancelled,
+        RuntimeHistorySourceFactKind.ChildControlAccepted, RuntimeHistorySourceFactKind.ChildControlApplied]);
 
     public override void ConfigureServices(IServiceCollection services)
     {
         // Resume validators use the canonical Events pipeline in composed and direct library hosts alike.
         base.ConfigureServices(services);
+        new ActivitiesRuntimeHostingFeature().ConfigureServices(services);
         if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, ContinuationSources))) services.AddSingleton(ContinuationSources);
-        services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ActivityInputHydrator>();
         services.TryAddScoped<ActivitySecretInputResolver>();
-        // IRuntimeSecretResolver and IRuntimeSecretMask are replacement contracts: more than one composed fails shell
-        // activation. The runtime registers the mask's default; the activator and the work handlers consume it.
-        RuntimeSecretResolverCompositionValidator.Register(services);
-        RuntimeSecretMaskCompositionValidator.Register(services);
         services.AddOptions<BackgroundActivityWorkerOptions>();
         services.TryAddScoped<BackgroundActivityCompletionCodec>();
         services.TryAddScoped<BackgroundActivityCoordinator>();
@@ -60,14 +55,5 @@ public class ActivitiesRuntimeFeature : Elsa.Events.EventsFeature
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowChildControlSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowInterventionDecisionSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowResumeBookmarkSchedulerWorkHandler>());
-
-        // Startup pass: register the activity CLR types — the activity types
-        // themselves AND their input/output element types — under the shared TypeAliasConvention. This lets the
-        // CLR construction descriptor resolve an activity's stable alias back to its real type (no
-        // Assembly.Load(name, version)), and a complex- or enum-typed input resolve to its real CLR type at
-        // compile time instead of falling back to object. Sources both the runtime-loaded assemblies and the
-        // registered IFeatureAssemblyProvider set, so dynamically-loaded package activities are covered
-        // once their package is loaded; the pass re-runs on each shell (re)build.
-        services.AddScoped<IStartupTask, RegisterActivityTypesStartupTask>();
     }
 }

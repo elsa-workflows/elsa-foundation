@@ -24,6 +24,8 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
     ];
 
     internal static readonly string[] Version2Kinds = ["BookmarkSuperseded", "DurableStateRecorded", "DurableStateRemoved"];
+    private static readonly string[] PublicationKinds = RuntimeHistorySourceFacts.PublicationObservationKinds
+        .Prepend(nameof(RuntimeHistorySourceFactKind.StimulusPublicationCommitted)).ToArray();
 
     // Observe the completed semantic envelope after every native owner has contributed.
     public int Order => int.MaxValue;
@@ -32,6 +34,10 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
     {
         ArgumentNullException.ThrowIfNull(policy);
         if (!RuntimeHistorySourceFacts.IsFinalProfile(policy) || !sourceAvailability.SourceInputs()) return false;
+        if (policy.SupportedKinds.Intersect(PublicationKinds, StringComparer.Ordinal).Any() &&
+            !PublicationKinds.All(kind => policy.SupportedKinds.Contains(kind, StringComparer.Ordinal))) return false;
+        if (policy.SupportedKinds.Intersect(DurableTimerHistoryFacts.Kinds, StringComparer.Ordinal).Any() &&
+            !DurableTimerHistoryFacts.Kinds.All(kind => policy.SupportedKinds.Contains(kind, StringComparer.Ordinal))) return false;
         if (policy.SupportedKinds.Contains("ValueCaptured", StringComparer.Ordinal) && !sourceAvailability.Values()) return false;
         if (policy.SupportedKinds.Any(kind => kind is "BookmarkRemoved" or "BookmarkSuperseded") && !sourceAvailability.CleanupInputs()) return false;
         var available = Kinds.Concat(Version2Kinds).ToHashSet(StringComparer.Ordinal);
@@ -40,8 +46,12 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             if (!policy.SupportedKinds.Contains("DeliveryReceived", StringComparer.Ordinal) || !sourceAvailability.DeliveryInputs()) return false;
             available.UnionWith(RuntimeHistoryDeliveryObservations.Kinds);
         }
-        // Post-commit and timer owners are qualified in their own source/writer slices.
-        available.UnionWith(sourceSupport.Where(sourceAvailability.SourceOwner).SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName));
+        foreach (var owner in sourceSupport)
+        {
+            var kinds = RuntimeHistoryCaptureCapabilities.Kinds(owner).ToArray();
+            if (policy.SupportedKinds.Intersect(kinds, StringComparer.Ordinal).Any() && sourceAvailability.SourceOwner(owner))
+                available.UnionWith(kinds);
+        }
         return policy.SupportedKinds.All(available.Contains);
     }
 
@@ -365,6 +375,20 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             {
                 activities.TryGetValue(fact.ActivityExecutionId ?? "", out var activity);
                 var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
+                // New admissions pin this outgoing-source shape; retained v3 replay bytes stay unchanged.
+                if (policy is ({ PolicyId: "runtime-history-v4", Version: 4 } or { PolicyId: "runtime-history-v5", Version: 5 }) && fact.Kind is
+                    (RuntimeHistorySourceFactKind.StimulusPublicationCommitted or RuntimeHistorySourceFactKind.ChildWorkflowDispatchRequested or RuntimeHistorySourceFactKind.ChildWorkflowSettled))
+                {
+                    var eventId = RuntimeHistoryIdentity.CreateId(checkpoint.CheckpointId, RuntimeHistorySourceFacts.EventName(fact.Kind), fact.SubjectId);
+                    var sources = commit.PostCommitIntents.Concat(commit.StateChanges.PostCommitOutbox
+                            .Where(change => change.Operation == RuntimeStateChangeOperation.Upsert && change.State?.SourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint)
+                            .Select(change => change.State!.Intent))
+                        .Where(intent => intent?.HistoryCausation is { } origin && origin.WorkflowExecutionId == commit.WorkflowExecutionId &&
+                            origin.HistoryEventId == eventId && origin.DeliveryId == RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, intent.IntentId))
+                        .Select(intent => intent!.HistoryCausation!.DeliveryId!).Distinct(StringComparer.Ordinal).ToArray();
+                    if (sources.Length > 1) throw new InvalidOperationException("One history origin cannot identify several outgoing sources.");
+                    if (sources.Length == 1) metadata["history.sourceDeliveryId"] = sources[0];
+                }
                 if (fact.RelatedWorkflowExecutionId is { } relatedRun) metadata["history.relatedWorkflowExecutionId"] = relatedRun;
                 if (fact.RelatedActivityExecutionId is { } relatedActivity) metadata["history.relatedActivityExecutionId"] = relatedActivity;
                 if (fact.TimerId is { } timer) metadata["history.timerId"] = timer;

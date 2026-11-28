@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
@@ -291,7 +292,7 @@ public sealed partial class AgentPublicationTests
             new() { Id = id, DefinitionId = "copywriter", Revision = 1, State = await StateAsync(manifest), CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow },
             new() { Id = id + "-layout", DraftId = id, Revision = 1, CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow }, head));
 
-        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, bool allowContinuity = false, bool invocationControls = false, AgentTurnLimits? limits = null, Action<IServiceCollection>? configureRuntime = null, AgentDefinitionSpec? spec = null)
+        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, bool allowContinuity = false, bool invocationControls = false, AgentTurnLimits? limits = null, AgentDefinitionSpec? spec = null)
         {
             var directory = Path.Combine(Path.GetTempPath(), "elsa-agent-publication-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
@@ -315,8 +316,10 @@ public sealed partial class AgentPublicationTests
             new Elsa.Events.EventsFeature().ConfigureServices(services);
             new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
             services.AddSingleton<IActivityDefinitionLookup>(new Elsa.Activities.Design.Persistence.Core.Services.ActivityDefinitionLookup(stores, stores));
-            services.AddWorkflowRuntime();
-            new ActivitiesRuntimeFeature().ConfigureServices(services);
+            WorkflowPublicationDefaults.Add(services);
+            services.AddSingleton(DispatchProxy.Create<IWorkflowExecutionStateStore, ForbiddenExecutionRead>());
+            services.AddSingleton(DispatchProxy.Create<IActivityExecutionStateStore, ForbiddenExecutionRead>());
+            new ActivitiesRuntimeHostingFeature().ConfigureServices(services);
             new SerializationFeature().ConfigureServices(services);
             new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
             new AgentDesignFeature().ConfigureServices(services);
@@ -326,14 +329,6 @@ public sealed partial class AgentPublicationTests
             services.AddSingleton<IAgentModelCapabilitiesSource>(model);
             services.AddSingleton<IActivityDefinitionAuthoringStore>(stores);
             services.AddSingleton<IActivityDefinitionVersionPublicationStore>(stores);
-            if (configureRuntime is not null)
-            {
-                services.AddSingleton<IPersistenceAccessContextAccessor>(access);
-                services.AddSingleton<IWorkflowExecutableStore>(new EfWorkflowExecutableStore(runtime, access));
-                services.AddSingleton<IExecutableActivityTemplateStore>(templates);
-                services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(sources);
-                configureRuntime(services);
-            }
             var root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var scope = root.CreateAsyncScope();
             var fixture = new Fixture(directory, design, runtime, publishing, root, scope, stores, templates, sources, receipts, commit, access, model, outputName, outputType, outputNullable, optionalBrief, allowContinuity, invocationControls, limits, spec);
@@ -355,6 +350,14 @@ public sealed partial class AgentPublicationTests
             await design.DisposeAsync();
             Directory.Delete(directory, true);
         }
+    }
+
+    // The actual activation strategy participates in publication's capability check. It must not
+    // inspect classic execution state during compilation or publication.
+    public class ForbiddenExecutionRead : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+            throw new InvalidOperationException("Publication unexpectedly read workflow execution state.");
     }
 
     private sealed class Access : IPersistenceAccessContextAccessor, IActivityPublishingAuthorizationContext

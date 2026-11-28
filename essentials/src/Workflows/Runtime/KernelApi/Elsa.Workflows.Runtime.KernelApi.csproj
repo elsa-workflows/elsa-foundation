@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Serves the workflow runtime API's run reads from the clean-slate kernel on a kernel shell: Studio's Runs page lists the kernel's runs.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Api/Http/Elsa.Workflows.Runtime.Api.Http.csproj" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHosting" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.KernelHost.Tests" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Persistence/Elsa.Workflows.Runtime.Persistence/Elsa.Workflows.Runtime.Persistence.csproj" />
+    <ProjectReference Include="../KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

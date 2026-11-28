@@ -18,6 +18,20 @@ public sealed record WorkbenchShell(
 
     public static readonly WorkbenchShell Development = new("Development", "shells.json", null, new Dictionary<string, string>());
 
+    // Configuration attestation exercises live shell replacement without an owned workflow engine.
+    public static readonly WorkbenchShell Reloadable = Development with
+    {
+        Settings = new Dictionary<string, string>
+        {
+            ["DOTNET_USE_POLLING_FILE_WATCHER"] = "true",
+            [$"{FeaturesPath}:ActorHttpConnections"] = "false",
+            [$"{FeaturesPath}:KernelActivitiesHttp"] = "false",
+            [$"{FeaturesPath}:KernelWorkflowDashboardQueries"] = "false",
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelHosting"] = "false",
+            [$"{FeaturesPath}:WorkflowsRuntimeKernelRetainedApi"] = "false"
+        }
+    };
+
     public static readonly WorkbenchShell Baseline = new("Development", "shells.baseline.json", null, new Dictionary<string, string>());
 
     /// <summary>
@@ -32,8 +46,7 @@ public sealed record WorkbenchShell(
         // is built to refuse, so it migrates on activation like the other compositions. One override covers every
         // module: Secrets reads this same key since its own MigratePolicy setting was retired.
         ["Elsa:Persistence:EntityFramework:Migrate:Policy"] = "AutoMigrate",
-        [$"{FeaturesPath}:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = "smoke-test-recovery-continuation-signing-key",
-        [$"{FeaturesPath}:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = "smoke-test-hierarchy-cursor-signing-key",
+        [$"{FeaturesPath}:WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence:RecoveryContinuationSigningKey"] = "smoke-test-recovery-continuation-signing-key",
         [$"{FeaturesPath}:FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword"] = $"Smoke-{Guid.NewGuid():n}!",
         [$"{FeaturesPath}:FoundationIdentityOpenIddict:SigningKey"] = Convert.ToBase64String(RSA.Create(2048).ExportPkcs8PrivateKey())
     });

@@ -36,7 +36,7 @@ studio.AddElsaStudioNuplane(options => options.DirectoryFeedName = "weaver-studi
         options.EnableAutomaticReconciliation = false;
         options.StartupFailurePolicy = StartupFailurePolicy.FailHost;
     });
-    nuplane.AddDirectoryFeed("weaver-studio", "runtime-feed", feed => { feed.Watch = false; feed.IncludeAll(); });
+    nuplane.AddDirectoryFeed("weaver-studio", "runtime-feed", feed => { feed.Trust = Nuplane.Abstractions.FeedTrustLevel.Trusted; feed.Watch = false; feed.IncludeAll(); });
 });
 studio.Services.PostConfigure<NuplaneIntegrationOptions>(integration => {
     integration.Enabled = true;

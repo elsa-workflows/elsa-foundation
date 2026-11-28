@@ -1,8 +1,9 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { runPath } from "./AgentInvocationPage";
+import { StudioShellBreadcrumbs, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
-import { CheckCircle2, RefreshCw, UserCheck, XCircle } from "lucide-react";
+import { CheckCircle2, UserCheck, XCircle } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioPage, StudioAlert, SkeletonRows, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
 import {
   decideReview, getReview, newRequestId, readReviewReference,
   type HumanReviewView, type ReceiptStatus, type ReviewDecision, type ReviewReference
@@ -23,11 +24,13 @@ const receiptMessages: Record<ReceiptStatus, string> = {
   Refused: "Your decision was not admitted. Check your permission and submit again."
 };
 
-export function HumanReviewPage({ context, reference: given }: { context: StudioEndpointContext; reference?: ReviewReference | null }) {
+export function HumanReviewPage({ context, reference: given, navigate }: { context: StudioEndpointContext; navigate?(path: string): void; reference?: ReviewReference | null }) {
   const reference = given ?? readReviewReference(window.location.pathname);
   // Each exact wait gets its own page state, so content, comment, receipt and request ID never carry over to another review.
   const key = reference ? `${reference.workflowExecutionId}/${reference.activityExecutionId}` : "";
-  return <ReviewScreen key={key} context={context} reference={reference} />;
+  const run = reference ? runPath(reference) : "/workflows/instances";
+  return <><StudioShellBreadcrumbs items={navigate ? [{ label: reference ? "Workflow run" : "Runs", onClick: () => navigate(run) }] : [{ href: run, label: reference ? "Workflow run" : "Runs" }]} current="Human review" />
+    <ReviewScreen key={key} context={context} reference={reference} /></>;
 }
 
 function ReviewScreen({ context, reference }: { context: StudioEndpointContext; reference: ReviewReference | null }) {
@@ -88,7 +91,7 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
     }
   }, [busy, comment, context, load, reference, refresh]);
 
-  if (load.kind === "loading") return <StudioPage aria-busy="true"><p>Loading review…</p></StudioPage>;
+  if (load.kind === "loading") return <StudioPage aria-busy="true"><SkeletonRows label="Loading review" /></StudioPage>;
   if (load.kind === "missing")
     return <StudioPage data-testid="review-missing"><StudioResultState title="Review not found" description="No visible review matches this link. It may belong to another tenant or no longer exist." /></StudioPage>;
   if (load.kind === "error")
@@ -101,23 +104,23 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
     <StudioPage className="agent-review" data-status={review.status}>
       <StudioPageHeader
         icon={<UserCheck aria-hidden="true" size={18} />}
-        eyebrow="Human review"
+        compact
         title={review.title?.trim() || "Content awaiting review"}
         description={<span data-testid="review-status">{statusLabel(review)}</span>}
-        actions={<StudioButton aria-label="Refresh review" onClick={() => void refresh()}><RefreshCw aria-hidden="true" size={14} /> Refresh</StudioButton>} />
+        refresh={{ id: "agent-review", label: "Refresh review", onRefresh: refresh }} />
       <section aria-label="Content under review" className="agent-review__content">
         <ReviewContent content={review.content} />
       </section>
       {review.notes ? <section aria-label="Reviewer notes" className="agent-review__notes"><h2>Notes</h2><p>{review.notes}</p></section> : null}
-      {stale ? <p className="agent-review__stale" data-testid="review-stale">The review could not be refreshed; showing the last loaded state.</p> : null}
-      {receipt ? <p role="status" data-receipt={receipt.status} className="agent-review__receipt">{receiptMessages[receipt.status]}</p> : null}
+      {stale ? <StudioAlert tone="warning"><span data-testid="review-stale">The review could not be refreshed; showing the last loaded state.</span></StudioAlert> : null}
+      {receipt ? <StudioAlert tone={receipt.status === "Accepted" ? "success" : receipt.status === "Pending" ? "info" : "warning"}><span data-receipt={receipt.status}>{receiptMessages[receipt.status]}</span></StudioAlert> : null}
       {open ? (
         <form className="agent-review__decision" aria-label="Decision" onSubmit={event => { event.preventDefault(); void decide("Approve"); }}>
-          <StudioField controlId={commentId} label="Comment (optional)">
+          <StudioField controlId={commentId} label="Comment">
           <textarea id={commentId} value={comment} maxLength={4096} onChange={event => setComment(event.target.value)} disabled={busy} /></StudioField>
           <div className="agent-review__actions">
             <StudioButton type="submit" variant="primary" disabled={busy}><CheckCircle2 aria-hidden="true" size={14} /> Approve</StudioButton>
-            <StudioButton disabled={busy} onClick={() => void decide("Deny")}><XCircle aria-hidden="true" size={14} /> Deny</StudioButton>
+            <StudioButton variant="danger" disabled={busy} onClick={() => void decide("Deny")}><XCircle aria-hidden="true" size={14} /> Deny</StudioButton>
           </div>
         </form>
       ) : (

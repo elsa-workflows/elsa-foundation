@@ -55,7 +55,7 @@
     <_ElsaRepositoryRoot>$([System.String]::Copy('$(MSBuildThisFileDirectory)').Replace('\', '/'))</_ElsaRepositoryRoot>
     <_ElsaProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('\', '/'))</_ElsaProjectPath>
     <_ElsaProjectRelativePath Condition="$(_ElsaProjectPath.StartsWith('$(_ElsaRepositoryRoot)'))">$([System.String]::Copy('$(_ElsaProjectPath)').Substring($(_ElsaRepositoryRoot.Length)))</_ElsaProjectRelativePath>
-    <_ElsaIsBackendProject Condition="$(_ElsaProjectRelativePath.StartsWith('essentials/src/')) or $(_ElsaProjectRelativePath.StartsWith('apps/'))">true</_ElsaIsBackendProject>
+    <_ElsaIsBackendProject Condition="$(_ElsaProjectRelativePath.StartsWith('essentials/src/')) or $(_ElsaProjectRelativePath.StartsWith('server/apps/'))">true</_ElsaIsBackendProject>
     <_ElsaIsBackendProject Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(_ElsaProjectRelativePath)', '^extensions/[^/]+/src/')) and !$(_ElsaProjectRelativePath.Contains('/studio/'))">true</_ElsaIsBackendProject>
     <_ElsaLineVersion>$(ElsaVersion)</_ElsaLineVersion>
     <_ElsaLineVersion Condition="'$(ElsaVersionLine)' == 'A'">$(ElsaContractsVersion)</_ElsaLineVersion>

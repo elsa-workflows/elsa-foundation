@@ -15,18 +15,26 @@ public interface ITestRunWaitOperations
 
 internal sealed class TestRunWaitOperations(
     IWorkflowTestRunStarter testRuns,
-    IWorkflowExecutionStateStore executions,
     IWorkflowTestScopeStore scopes,
     IWorkflowExecutableStore executables,
-    IBookmarkStateStore bookmarks,
-    IActivityExecutionStateStore activities,
-    IBookmarkResumeDispatcher resume,
     IEnumerable<ITestRunWaitDriver> drivers,
-    TimeProvider time) : ITestRunWaitOperations
+    TimeProvider time,
+    IWorkflowTestRunWaitControl? kernel = null,
+    IWorkflowExecutionStateStore? executions = null,
+    IBookmarkStateStore? bookmarks = null,
+    IActivityExecutionStateStore? activities = null,
+    IBookmarkResumeDispatcher? resume = null) : ITestRunWaitOperations
 {
     public async Task<TestRunWaitsView> GetAsync(string testRunId, CancellationToken cancellationToken)
     {
-        var execution = await ResolveExecutionAsync(testRunId, cancellationToken);
+        var run = await testRuns.GetAsync(testRunId, cancellationToken);
+        if (IsKernelRun(run))
+        {
+            if (await GetKernelRunAsync(run!, cancellationToken) is not { } exact) return new([]);
+            return new((await ReadContextsAsync(exact, cancellationToken)).Select(DescribeWait).ToArray());
+        }
+        if (bookmarks is null) return new([]);
+        var execution = await ResolveExecutionAsync(run, cancellationToken);
         if (execution is null || !await IsOpenAsync(execution, cancellationToken))
             return new([]);
         var executable = await executables.FindAsync(execution.PinnedExecutable.ArtifactId, cancellationToken);
@@ -38,26 +46,24 @@ internal sealed class TestRunWaitOperations(
         {
             if (!executable.NodesById.TryGetValue(wait.ExecutableNodeId, out var node))
                 continue;
-            var context = new TestRunWaitContext(executable, node, wait);
-            var matches = drivers.Where(driver => driver.Supports(context)).ToArray();
-            var label = node.Metadata.GetValueOrDefault("displayName") ?? node.AuthoredActivityId;
-            result.Add(matches.Length == 1
-                ? new(wait.BookmarkId, node.AuthoredActivityId, label, matches[0].DriverId, true, null, matches[0].Describe(context))
-                : new(wait.BookmarkId, node.AuthoredActivityId, label, null, false,
-                    matches.Length == 0 ? "No installed module supports test delivery to this wait." : "Multiple module drivers claim this wait.", []));
+            result.Add(DescribeWait(new(executable, node, wait)));
         }
         return new(result);
     }
 
     public async Task<TestRunEventView> DeliverAsync(TestRunEventRequest request, CancellationToken cancellationToken)
     {
-        var execution = await ResolveExecutionAsync(request.TestRunId, cancellationToken);
+        var run = await testRuns.GetAsync(request.TestRunId, cancellationToken);
+        if (IsKernelRun(run))
+        {
+            var exact = await GetKernelRunAsync(run!, cancellationToken);
+            return exact is null ? Missing() : await DeliverKernelAsync(exact, request, cancellationToken);
+        }
+        if (bookmarks is null || activities is null || resume is null) return Missing();
+        var execution = await ResolveExecutionAsync(run, cancellationToken);
         if (execution is null || !await IsOpenAsync(execution, cancellationToken))
-            return new("Rejected", "This test run is missing, stopped or expired.");
-        if (string.IsNullOrWhiteSpace(request.WaitId) || string.IsNullOrWhiteSpace(request.ModeId))
-            return new("Rejected", "Select an active wait and a delivery mode.");
-        if (!Guid.TryParseExact(request.DeliveryId, "D", out _))
-            return new("Rejected", "The event delivery ID must be a UUID.");
+            return Missing();
+        if (ValidateRequest(request) is { } invalid) return invalid;
 
         // The canonical payload is module-owned. A prior receipt is checked against the submitted configuration
         // digest before bookmark lookup, so retries remain safe after the wait has been consumed.
@@ -105,13 +111,12 @@ internal sealed class TestRunWaitOperations(
         };
     }
 
-    private async Task<WorkflowExecutionState?> ResolveExecutionAsync(string testRunId, CancellationToken cancellationToken)
+    private async Task<WorkflowExecutionState?> ResolveExecutionAsync(WorkflowTestRunView? view, CancellationToken cancellationToken)
     {
-        var view = await testRuns.GetAsync(testRunId, cancellationToken);
-        if (view?.WorkflowExecutionId is not { } executionId)
+        if (executions is null || view?.WorkflowExecutionId is not { } executionId)
             return null;
         var execution = await executions.FindAsync(executionId, cancellationToken);
-        return execution is { RunKind: WorkflowRunKind.TestRun, TestScope: { } scope } && scope.ScopeId == testRunId ? execution : null;
+        return execution is { RunKind: WorkflowRunKind.TestRun, TestScope: { } scope } && scope.ScopeId == view.TestRunId ? execution : null;
     }
 
     private async ValueTask<bool> IsOpenAsync(WorkflowExecutionState execution, CancellationToken cancellationToken)
@@ -120,4 +125,83 @@ internal sealed class TestRunWaitOperations(
         var record = await scopes.FindAsync(expected.ScopeId, cancellationToken);
         return record is { State: WorkflowTestScopeState.Open } && WorkflowTestScope.ContextEquals(record.Scope, expected) && !expected.IsExpired(time.GetUtcNow());
     }
+
+    private sealed record KernelRun(string Execution, WorkflowExecutable Executable, WorkflowTestScopeRecord Scope);
+
+    private static bool IsKernelRun(WorkflowTestRunView? run) =>
+        run is not null && run.Metadata.GetValueOrDefault("runtime.sourceReferenceId") == run.TestRunId;
+
+    private async ValueTask<KernelRun?> GetKernelRunAsync(WorkflowTestRunView run, CancellationToken token)
+    {
+        if (kernel is null || run is not { WorkflowExecutionId: { } execution, ArtifactId: { } artifact } ||
+            await scopes.FindAsync(run.TestRunId, token) is not { State: WorkflowTestScopeState.Open } scope ||
+            scope.IsolatedActor?.ActorReference != execution || scope.Scope.IsExpired(time.GetUtcNow()) ||
+            await executables.FindAsync(artifact, token) is not { } executable)
+            return null;
+        return new(execution, executable, scope);
+    }
+
+    private async ValueTask<IReadOnlyList<TestRunWaitContext>> ReadContextsAsync(KernelRun run, CancellationToken token)
+    {
+        var waits = await kernel!.ReadAsync(run.Scope.Scope, run.Execution, token);
+        var result = new List<TestRunWaitContext>();
+        foreach (var wait in waits)
+        {
+            var target = WorkflowExecutableResumeTarget.ComposeScopedId(wait.NodeId, "resume-target:event");
+            if (!run.Executable.NodesById.TryGetValue(wait.NodeId, out var node) ||
+                !run.Executable.ResumeTargets.ContainsKey(target)) continue;
+            var bookmark = new BookmarkState(wait.WaitId, run.Execution, wait.FrameId, wait.NodeId, target, "Event",
+                wait.Event, null, new Dictionary<string, string>(), run.Scope.CreatedAt, run.Scope.Scope.ExpiresAt);
+            result.Add(new(run.Executable, node, bookmark));
+        }
+        return result;
+    }
+
+    private TestRunWaitView DescribeWait(TestRunWaitContext context)
+    {
+        var matches = drivers.Where(driver => driver.Supports(context)).ToArray();
+        var label = context.Node.Metadata.GetValueOrDefault("displayName") ?? context.Node.AuthoredActivityId;
+        return matches.Length == 1
+            ? new(context.Wait.BookmarkId, context.Node.AuthoredActivityId, label, matches[0].DriverId, true, null, matches[0].Describe(context))
+            : new(context.Wait.BookmarkId, context.Node.AuthoredActivityId, label, null, false,
+                matches.Length == 0 ? "No installed module supports test delivery to this wait." : "Multiple module drivers claim this wait.", []);
+    }
+
+    private async Task<TestRunEventView> DeliverKernelAsync(KernelRun run, TestRunEventRequest request, CancellationToken token)
+    {
+        if (ValidateRequest(request) is { } invalid) return invalid;
+        var configuration = TestRunDeliveryReceipt.Digest(JsonSerializer.SerializeToElement(new { modeId = request.ModeId, data = request.Data }));
+        var receipt = new TestRunDeliveryReceipt(request.TestRunId, request.DeliveryId, request.WaitId, configuration);
+        var prior = await kernel!.DeliverAsync(run.Scope.Scope, run.Execution, receipt, null, token);
+        if (prior != "Unseen") return DeliveryResult(prior);
+        var context = (await ReadContextsAsync(run, token)).SingleOrDefault(wait => wait.Wait.BookmarkId == request.WaitId);
+        if (context is null) return DeliveryResult("NoLongerWaiting");
+        var matches = drivers.Where(driver => driver.Supports(context)).ToArray();
+        if (matches is not [var driver]) return new("Rejected", "No single installed module can deliver to this wait.");
+        var validation = driver.Validate(context, request.ModeId, request.Data);
+        if (!validation.IsValid)
+            return new("Rejected", string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+        var stimulus = await driver.PrepareAsync(new(context, request.ModeId, request.Data), token);
+        receipt = new(request.TestRunId, request.DeliveryId, request.WaitId, configuration, TestRunDeliveryReceipt.Digest(stimulus));
+        return DeliveryResult(await kernel.DeliverAsync(run.Scope.Scope, run.Execution, receipt, stimulus, token));
+    }
+
+    private static TestRunEventView? ValidateRequest(TestRunEventRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.WaitId) || string.IsNullOrWhiteSpace(request.ModeId))
+            return new("Rejected", "Select an active wait and a delivery mode.");
+        return Guid.TryParseExact(request.DeliveryId, "D", out _) ? null : new("Rejected", "The event delivery ID must be a UUID.");
+    }
+
+    private static TestRunEventView Missing() => new("Rejected", "This test run is missing, stopped or expired.");
+
+    private static TestRunEventView DeliveryResult(string status) => status switch
+    {
+        "Delivered" or "AlreadyDelivered" => new(status),
+        "Conflict" => new("Rejected", "This delivery ID already names different data or another wait."),
+        "Limit" => new("Rejected", "This test run reached its manual event delivery limit. Start a new test run."),
+        "Pending" => new("Pending", "This delivery is queued. Refresh its result before retrying."),
+        "NoLongerWaiting" => new("NoLongerWaiting", "The selected wait is no longer active."),
+        _ => Missing()
+    };
 }

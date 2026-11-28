@@ -1,0 +1,3 @@
+# Elsa 4 JSON readers for already-converted migration output.
+Elsa.Activities.Design.Reconciliation.Json
+Elsa.Workflows.Design.Reconciliation.Json

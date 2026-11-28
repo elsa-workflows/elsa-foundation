@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { writeFile } from "node:fs/promises";
 
 // Automation can use Node. The independent consumer restore/publish/server run with denial shims instead.
-const require = createRequire(new URL("../../../Studio/package.json", import.meta.url));
+const require = createRequire(new URL("../../../studio/package.json", import.meta.url));
 const { chromium } = require("@playwright/test");
 const base = process.env.STUDIO_ASSET_PROBE_BASE;
 const imports = JSON.parse(process.env.STUDIO_ASSET_PROBE_IMPORTS);

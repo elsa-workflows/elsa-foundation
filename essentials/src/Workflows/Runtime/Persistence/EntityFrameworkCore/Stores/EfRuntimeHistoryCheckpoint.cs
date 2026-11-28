@@ -53,6 +53,18 @@ internal static class EfRuntimeHistoryCheckpoint
                 !(policy?.IsEquivalentTo(incoming.HistoryCapturePolicy) ?? incoming.HistoryCapturePolicy is null))))
             throw new InvalidOperationException("History must retain the native execution's admitted policy, including legacy absence.");
         EnsureAccess();
+        EfTimerHistoryOwner.Document? timerOwner = null;
+        if (native is null && incoming is not null)
+        {
+            // Only first native admission can replace the independent pre-native source choice.
+            // Existing native admission is immutable; ordinary fenced checkpoints keep their no-extra-read path.
+            var originalOwner = commit.ExpectedFence is null
+                ? await EfTimerHistoryOwner.CoordinateFirstNativeAsync(context, scope, run, cancellationToken)
+                : await EfTimerHistoryOwner.ReadAsync(context, scope, run, false, cancellationToken);
+            timerOwner = EfTimerHistoryOwner.Read(originalOwner, scope, run);
+            EnsureAccess();
+            EfTimerHistoryOwner.EnsurePolicy(timerOwner, scope, run, policy);
+        }
         // Native admission is the authority. A confirmed uncaptured run must not depend on
         // history storage/readability, and a batch cannot retrofit that admission choice.
         if (policy is null)
@@ -124,7 +136,7 @@ internal static class EfRuntimeHistoryCheckpoint
             var newCount = ordered.Count(entry => !retained.ContainsKey(entry.Candidate.Event.HistoryEventId));
             var next = new RuntimeHistoryHead(run, head is { FirstSequence: > 0 } ? head.FirstSequence : newCount == 0 ? 0 : checked(sequence + 1),
                 checked(sequence + newCount), commit.CommitId, recordedAt, policy, head?.CapturedFromStart ?? batches.Any(batch => batch.StartsAtRunStart),
-                head?.HasGaps ?? false, head?.PurgedThroughSequence ?? 0);
+                head?.HasGaps ?? timerOwner?.LostFacts ?? false, head?.PurgedThroughSequence ?? 0);
             EnsureAccess();
             await ReserveHeadAsync(context, mapping, chain, scope, run, headRow, next, cancellationToken);
             var events = new List<RuntimeHistoryEvent>(newCount);

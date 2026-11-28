@@ -1,10 +1,7 @@
 using System.Reflection;
 using Elsa.Activities.DispatchWorkflow.Design;
-using Elsa.Activities.DispatchWorkflow.Runtime;
-using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
-using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -12,11 +9,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Extensions;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Xunit;
 using Activity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
 
@@ -25,116 +18,9 @@ namespace Elsa.Activities.DispatchWorkflow.Tests;
 public sealed class DispatchWorkflowContractTests
 {
     [Fact]
-    public void Feature_types_remain_inheritable_with_virtual_configuration()
+    public void Design_feature_remains_inheritable_with_virtual_configuration()
     {
-        AssertFeatureCanBeSpecialized(typeof(DispatchWorkflowRuntimeFeature));
         AssertFeatureCanBeSpecialized(typeof(DispatchWorkflowDesignFeature));
-    }
-
-    [Fact]
-    public void Runtime_feature_exposes_default_and_custom_positive_maximum_nesting_depth()
-    {
-        Assert.Equal(32, new DispatchWorkflowOptions().MaxNestingDepth);
-        var services = new ServiceCollection();
-
-        new DispatchWorkflowRuntimeFeature { MaxNestingDepth = 7 }.ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        Assert.Equal(7, provider.GetRequiredService<IOptions<DispatchWorkflowOptions>>().Value.MaxNestingDepth);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void Runtime_feature_rejects_nonpositive_maximum_nesting_depth(int maximum)
-    {
-        var feature = new DispatchWorkflowRuntimeFeature { MaxNestingDepth = maximum };
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => feature.ConfigureServices(new ServiceCollection()));
-    }
-
-    // Kept beside the composition test: asserts the retry policy each intent handler contribution carries.
-    [Fact]
-    public async Task Runtime_feature_registers_resolvable_handlers_enricher_and_retry_policy()
-    {
-        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
-        await using var scope = fixture.Services.CreateAsyncScope();
-
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ChildStartExecutor>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ChildCancelExecutor>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>());
-        Assert.IsType<WorkflowDispatchDeliveryFailureProjector>(
-            scope.ServiceProvider.GetRequiredService<IPostCommitFailureProjector>());
-        Assert.Contains(
-            scope.ServiceProvider.GetServices<IRuntimeCheckpointCommitEnricher>(),
-            enricher => enricher is WorkflowDispatchCompletionEnricher);
-        Assert.Contains(
-            scope.ServiceProvider.GetServices<IRuntimeCheckpointCommitEnricher>(),
-            enricher => enricher is WorkflowDispatchCancellationEnricher);
-
-        var contributions = fixture.Services
-            .GetServices<RuntimePostCommitIntentHandlerContribution>()
-            .ToDictionary(contribution => contribution.IntentKind, StringComparer.Ordinal);
-        Assert.Equal(typeof(ChildStartExecutor), contributions[DispatchWorkflowConstants.StartChildIntentKind].HandlerType);
-        Assert.Equal(DispatchWorkflowDeliveryOptions.DefaultMaxDeliveryAttempts, contributions[DispatchWorkflowConstants.StartChildIntentKind].RetryPolicy.MaxAttempts);
-        Assert.Equal(DispatchWorkflowDeliveryOptions.DefaultRetryDelay, contributions[DispatchWorkflowConstants.StartChildIntentKind].RetryPolicy.Delay);
-        Assert.False(contributions[DispatchWorkflowConstants.StartChildIntentKind].RetryPolicy.RetryUntilAcknowledged);
-        Assert.Equal(typeof(ChildCancelExecutor), contributions[DispatchWorkflowConstants.CancelChildIntentKind].HandlerType);
-        Assert.True(contributions[DispatchWorkflowConstants.CancelChildIntentKind].RetryPolicy.RetryUntilAcknowledged);
-        Assert.Equal(TimeSpan.FromSeconds(1), contributions[DispatchWorkflowConstants.CancelChildIntentKind].RetryPolicy.Delay);
-        Assert.Equal(typeof(ParentResumeExecutor), contributions[DispatchWorkflowConstants.ResumeParentIntentKind].HandlerType);
-        Assert.True(contributions[DispatchWorkflowConstants.ResumeParentIntentKind].RetryPolicy.RetryUntilAcknowledged);
-        Assert.Equal(TimeSpan.FromSeconds(1), contributions[DispatchWorkflowConstants.ResumeParentIntentKind].RetryPolicy.Delay);
-    }
-
-    [Fact]
-    public void Runtime_feature_snapshots_validated_host_child_start_delivery_policy()
-    {
-        var services = new ServiceCollection();
-        var feature = new DispatchWorkflowRuntimeFeature
-        {
-            ChildStartMaxDeliveryAttempts = 7,
-            ChildStartRetryDelaySeconds = 2.5
-        };
-
-        feature.ConfigureServices(services);
-
-        var contribution = Assert.Single(
-            services
-                .Where(descriptor => descriptor.ServiceType == typeof(RuntimePostCommitIntentHandlerContribution))
-                .Select(descriptor => descriptor.ImplementationInstance)
-                .OfType<RuntimePostCommitIntentHandlerContribution>(),
-            item => item.IntentKind == DispatchWorkflowConstants.StartChildIntentKind);
-        Assert.Equal(7, contribution.RetryPolicy.MaxAttempts);
-        Assert.Equal(TimeSpan.FromSeconds(2.5), contribution.RetryPolicy.Delay);
-        Assert.False(contribution.RetryPolicy.RetryUntilAcknowledged);
-        Assert.Throws<ArgumentOutOfRangeException>(() => feature.ChildStartMaxDeliveryAttempts = 0);
-        Assert.Throws<ArgumentOutOfRangeException>(() => feature.ChildStartRetryDelaySeconds = 0);
-    }
-
-    // Kept beside the composition test: replacement-contract rejection in either registration order.
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Runtime_processor_rejects_competing_failure_projectors_in_either_registration_order(
-        bool competitorFirst)
-    {
-        var services = new ServiceCollection().AddWorkflowRuntime();
-        if (competitorFirst)
-            services.AddScoped<IPostCommitFailureProjector, StubFailureProjectionReplacement>();
-
-        new DispatchWorkflowRuntimeFeature().ConfigureServices(services);
-
-        if (!competitorFirst)
-            services.AddScoped<IPostCommitFailureProjector, StubFailureProjectionReplacement>();
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
-
-        Assert.Contains("exactly one", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -210,45 +96,6 @@ public sealed class DispatchWorkflowContractTests
         var identity = new WorkflowDispatchIdentity("parent-1", "activity-1");
         Assert.StartsWith("bookmark:dispatch-wait:v1:", identity.WaitBookmarkId, StringComparison.Ordinal);
         Assert.StartsWith("stimulus:dispatch-wait:v1:", identity.WaitStimulusHash, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Realized_dynamic_inputs_are_rejected_before_dispatch_without_exposing_raw_values()
-    {
-        const string rejectedValue = "runtime-secret";
-        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await fixture.StartParentAsync(
-                "invalid-input",
-                "parent-invalid-input",
-                "correlation-parent",
-                dispatchInputs: new Dictionary<string, object?> { ["unknown"] = rejectedValue }));
-
-        Assert.Contains("not declared", exception.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(rejectedValue, exception.Message, StringComparison.Ordinal);
-        Assert.Empty(await fixture.ListDispatchesAsync("parent-invalid-input"));
-    }
-
-    [Fact]
-    public async Task Attempted_depth_33_is_rejected_before_dispatch_staging_or_child_materialization()
-    {
-        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await fixture.StartParentAsync(
-                "over-depth",
-                "parent-over-depth",
-                "correlation-parent",
-                dispatchNestingDepth: 32));
-
-        Assert.Contains("nesting depth 33", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("maximum of 32", exception.Message, StringComparison.Ordinal);
-        Assert.Empty(await fixture.ListDispatchesAsync("parent-over-depth"));
-        Assert.Empty(fixture.ChildProbe.Observations);
-        Assert.DoesNotContain(
-            fixture.Actors.Activations,
-            activation => activation.WorkflowExecutionId.Contains(":dispatch:", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -400,15 +247,4 @@ public sealed class DispatchWorkflowContractTests
         nameof(Activity.CorrelationId) => 4,
         _ => int.MaxValue
     };
-
-    private sealed class StubFailureProjectionReplacement
-        : IPostCommitFailureProjector
-    {
-        public ValueTask<PostCommitFailureProjection?> ProjectAsync(
-            RuntimePostCommitOutboxItem item,
-            RuntimePostCommitOutboxDeliveryResult finalResult,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<PostCommitFailureProjection?>(null);
-    }
-
 }

@@ -39,6 +39,37 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
+    internal bool OwnsTimerHistory(RuntimeDbContext timerContext, IPersistenceAccessContextAccessor timerAccess, TimeProvider clock) =>
+        ReferenceEquals(context, timerContext) && ReferenceEquals(accessContextAccessor, timerAccess) && ReferenceEquals(_timeProvider, clock);
+
+    async ValueTask<bool> IRuntimeCheckpointCommitStore.RequiresUnrecordedTimerDischargeAsync(string workflowExecutionId, CancellationToken token)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId); token.ThrowIfCancellationRequested();
+        var captured = accessContextAccessor.Current; var scope = captured.RequireScope().Value;
+        if (context.Database.CurrentTransaction is not null || context.Database.GetEnlistedTransaction() is not null || Transaction.Current is not null)
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Timer completion responsibility requires a current native ownership view.");
+        try
+        {
+            var owner = EfTimerHistoryOwner.Read(await EfTimerHistoryOwner.ReadAsync(context, scope, workflowExecutionId, false, token), scope, workflowExecutionId);
+            token.ThrowIfCancellationRequested();
+            if (accessContextAccessor.Current != captured) throw new InvalidOperationException("Native timer responsibility changed persistence access.");
+            return owner is not null;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        { token.ThrowIfCancellationRequested(); throw; }
+        catch (Exception error) when (error is InvalidDataException or JsonException)
+        {
+            token.ThrowIfCancellationRequested();
+            throw new RuntimeHistoryIntegrityException(workflowExecutionId, "native timer ownership evidence could not be interpreted", error);
+        }
+        catch (Exception error) when (EfRuntimeHistoryCheckpoint.IsProviderUnavailable(error, token))
+        {
+            token.ThrowIfCancellationRequested();
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "Timer completion responsibility could not be inspected.",
+                new RuntimeHistoryUnavailableException(workflowExecutionId, "read-timer-completion-owner", error));
+        }
+    }
+
     bool IRuntimeCheckpointCommitStore.SupportsHistory => true;
     bool IRuntimeCheckpointCommitStore.CanCommitHistory(IRuntimeHistoryStore reader)
     {
@@ -235,6 +266,15 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.CommitId);
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.WorkflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Captured cleanup must commit its sibling activity/inspection changes with the timer.
+        // Provider callbacks can alter these mutable settings after participant staging.
+        var requiresHistoryTracking = commit.HistoryBatches is { Count: > 0 } ||
+            commit.StateChanges.ActivityScopeCleanups.Any(cleanup => cleanup.TimerIds.Count > 0);
+        void EnsureHistoryTracking()
+        {
+            if (requiresHistoryTracking) EfTimerHistoryOwner.EnsureWriteTracking(context);
+        }
 
         commit.EnsureModelStateShape();
         commit.EnsureModelAdmissionShape();
@@ -597,7 +637,7 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
                     context, commit.StateChanges.DurableValues, scope, writeCancellationToken);
 
                 await EfRuntimeCheckpointActivityScopeCleanupParticipantStaging.StageAsync(
-                    context, commit.StateChanges.ActivityScopeCleanups, scope, writeCancellationToken);
+                    context, commit.StateChanges.ActivityScopeCleanups, scope, _timeProvider.GetUtcNow(), writeCancellationToken);
 
                 await EfRuntimeCheckpointParticipantStaging.StageOperationalAsync(
                     context, commit.StateChanges.Operational, scope, writeCancellationToken);
@@ -654,7 +694,11 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
                 try
                 {
                     EnsureExactBookmarkDeadline(commit);
+                    EnsureHistoryTracking();
+                    // Detect the whole participant set before saving callbacks can disable automatic detection.
+                    if (requiresHistoryTracking) context.ChangeTracker.DetectChanges();
                     await context.SaveChangesAsync(writeCancellationToken);
+                    EnsureHistoryTracking();
                     fenceUnchecked = false;
                 }
                 catch (DbUpdateConcurrencyException exception) when (fenceBump is not null && exception.Entries.Count != 0 &&
@@ -675,8 +719,10 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
                         context.Entry(fenceBump).State = EntityState.Detached;
                 }
 
+                EnsureHistoryTracking();
                 context.RuntimeCheckpointCommits.Add(marker);
                 await context.SaveChangesAsync(writeCancellationToken);
+                EnsureHistoryTracking();
                 EnsureExactBookmarkDeadline(commit);
                 transactionCommitRequested = true;
                 try

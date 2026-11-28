@@ -6,7 +6,7 @@ public static class RepoLayoutContractTests
     public static void Run()
     {
         var repo = RepoContext.Discover();
-        var roots = new[] { "essentials/src", "apps", "essentials/tests" }
+        var roots = new[] { "essentials/src", "server/apps", "essentials/tests" }
             .Concat(ExtensionRoots(repo.Root, "src", "tests"))
             .Where(root => Directory.Exists(repo.Absolute(root)))
             .ToArray();
@@ -49,7 +49,7 @@ public static class RepoLayoutContractTests
 
         var sourceFiles = RepoLayout.SourceFiles(repo);
         if (!sourceFiles.Any(path => path.StartsWith("essentials/src/", StringComparison.Ordinal)) ||
-            !sourceFiles.Any(path => path.StartsWith("apps/", StringComparison.Ordinal)) ||
+            !sourceFiles.Any(path => path.StartsWith("server/apps/", StringComparison.Ordinal)) ||
             !sourceFiles.Any(RepoLayout.IsExtensionSourcePath) ||
             sourceFiles.Any(path => !RepoLayout.IsModulePath(path) || path.Contains("/studio/", StringComparison.Ordinal)))
             throw new InvalidOperationException("Backend source pathspecs missed a product root or included a non-backend/Studio source path.");

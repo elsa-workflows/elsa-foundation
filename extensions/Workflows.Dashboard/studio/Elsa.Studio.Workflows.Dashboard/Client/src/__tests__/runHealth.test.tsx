@@ -15,11 +15,12 @@ describe("Workflow Run Health widget", () => {
   it("registers permission-gated Home widgets with versioned settings and refresh contracts", () => {
     const { api, items } = apiFixture();
     register(api);
-    expect(items.map(item => item.id)).toEqual(["workflows.portfolio", "workflows.run-health"]);
-    for (const item of items) expect(item).toMatchObject({ requiresFeature: "workflows", permissions: ["workflows/dashboard:read"] });
-    expect(items[1]).toMatchObject({ defaultSize: "full", supportedSizes: ["medium", "wide", "full"], minimumRefreshIntervalMs: 60_000, cacheLifetimeMs: 60_000 });
-    expect(items[1].settings).toMatchObject({ schemaVersion: 1, defaults: { range: "24h", includeTestRuns: false } });
-    expect(items[1].settings?.validate({ range: "bogus", includeTestRuns: false })).toBeNull();
+    const dashboardItems = items.filter(item => item.id.startsWith("workflows."));
+    expect(dashboardItems.map(item => item.id)).toEqual(["workflows.portfolio", "workflows.run-health"]);
+    for (const item of dashboardItems) expect(item).toMatchObject({ requiresFeature: "workflows", permissions: ["workflows/dashboard:read"] });
+    expect(dashboardItems[1]).toMatchObject({ defaultSize: "full", supportedSizes: ["medium", "wide", "full"], minimumRefreshIntervalMs: 60_000, cacheLifetimeMs: 60_000 });
+    expect(dashboardItems[1].settings).toMatchObject({ schemaVersion: 1, defaults: { range: "24h", includeTestRuns: false } });
+    expect(dashboardItems[1].settings?.validate({ range: "bogus", includeTestRuns: false })).toBeNull();
   });
 
   it.each([["24h", "hour", 24], ["7d", "day", 168], ["30d", "day", 720]] as Array<[RunHealthRange, string, number]>)("loads %s with exact half-open boundaries and the expected bucket", async (range, bucket, hours) => {

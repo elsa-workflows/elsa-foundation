@@ -26,7 +26,7 @@ Site Git Sync reads `gitbook-docs.yaml` at the repository root. It maps the defa
 
 The logical mapping key `elsa-4-docs` is permanent after the first sync. Changing a live key can replace its space; it is not a rollback mechanism. Review any GitBook-generated configuration changes through the content review path.
 
-Link to canonical source guides instead of copying their explanations. Current-development source links must describe the actual `main` tree. Foundation/Studio consolidation landed in #2644. Current source roots include `Essentials/`, `Extensions/` and `Studio/`. Prefer explicit existing file links: GitBook rewrote the valid `Essentials/src` directory URL to a nonexistent `Essentials/src/README.md`; #2647 fixed that link using the repository overview. Check the actual served preview anchor as well as the authored target. Preserve immutable quickstart links and image digests: they document a specific historical pair and environment.
+Link to canonical source guides instead of copying their explanations. Current-development source links must describe the actual `main` tree. Foundation/Studio consolidation landed in #2644. Current product roots are `server/`, `studio/` and `extensions/`. Prefer explicit existing file links: GitBook rewrote the then-valid `Essentials/src` directory URL to a nonexistent `Essentials/src/README.md`; #2647 fixed that link using the repository overview. Check the actual served preview anchor as well as the authored target. Preserve immutable quickstart links and image digests: they document a specific historical pair and environment.
 
 GitBook's [content configuration](https://gitbook.com/docs/docs-as-code/git-sync/content-configuration) explains YAML mapping and `SUMMARY.md` navigation.
 

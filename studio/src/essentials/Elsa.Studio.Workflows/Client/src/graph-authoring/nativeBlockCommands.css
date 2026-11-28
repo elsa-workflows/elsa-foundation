@@ -1,0 +1,17 @@
+.wf-block-commands{display:flex;flex-wrap:wrap;align-items:center;gap:var(--wf-space-2,.5rem);padding:.25rem .5rem}
+.wf-canvas-tools-slot{display:contents}
+.wf-canvas-tools .wf-block-commands{flex-wrap:nowrap;padding:0;margin-left:4px;padding-left:6px;border-left:1px solid var(--studio-border)}
+.wf-canvas-tools .wf-block-commands button{border-color:transparent;background:transparent}
+
+.wf-block-commands .wf-block-menu-trigger { display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .5rem; }
+.wf-block-menu-notes { padding: .25rem .75rem; border-top: 1px solid var(--studio-border); color: var(--studio-text-muted); }
+.wf-block-menu-notes p { margin: .25rem 0; font-size: var(--studio-label-size); }
+.studio-dialog.wf-block-dialog { width: min(54rem, calc(100vw - 2rem)); overflow: hidden; grid-template-rows: auto minmax(0, 1fr) auto; }
+.wf-block-dialog-body { min-height: 0; overflow: auto; overflow-wrap: anywhere; }
+.wf-block-dialog-body pre { max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wf-block-dialog .studio-dialog-footer { flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .wf-block-commands { flex-wrap: nowrap; overflow: auto hidden; }
+  .wf-block-commands button { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+}
+.wf-block-command-notice{margin:0;padding:0 1rem .5rem;font-size:var(--wf-text-sm)}

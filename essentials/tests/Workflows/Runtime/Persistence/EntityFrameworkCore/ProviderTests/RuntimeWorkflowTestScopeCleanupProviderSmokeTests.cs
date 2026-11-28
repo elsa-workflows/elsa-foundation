@@ -65,15 +65,16 @@ internal static class RuntimeWorkflowTestScopeCleanupProviderSmoke
         await context.Database.EnsureCreatedAsync();
         var access = new FixedAccessor(tenant);
         var scopes = new EfWorkflowTestScopeStore(context, access, codec);
-        var dispatches = new EfWorkflowDispatchStore(context, access);
         var cleanup = new EfWorkflowTestScopeCleanupStore(context, access, codec);
         await scopes.CreateAsync(scope, Now);
         var pending = Dispatch("pending", scope);
-        var started = Dispatch("started", scope, Now.AddSeconds(1));
-        await dispatches.SaveAsync(pending);
-        await dispatches.SaveAsync(started);
-        started = started.TransitionTo(WorkflowDispatchStatus.Started, Now.AddSeconds(2));
-        await dispatches.SaveAsync(started);
+        var started = Dispatch("started", scope, Now.AddSeconds(1))
+            .TransitionTo(WorkflowDispatchStatus.Started, Now.AddSeconds(2));
+        context.WorkflowDispatches.AddRange(
+            WorkflowDispatchEfSupport.ToEntity(pending, tenant, WorkflowDispatchEfSupport.RowId(tenant, pending.DispatchId), 1),
+            WorkflowDispatchEfSupport.ToEntity(started, tenant, WorkflowDispatchEfSupport.RowId(tenant, started.DispatchId), 2));
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
         await scopes.CloseAsync(new WorkflowTestScopeCloseRequest(
             scope.ScopeId, WorkflowTestScopeCloseReason.ExplicitTeardown, Now.AddMinutes(1)));
 
@@ -87,9 +88,15 @@ internal static class RuntimeWorkflowTestScopeCleanupProviderSmoke
         Assert.Equal(1, result.CancelledBeforeAdmission);
         Assert.Equal(1, result.CancellationQueued);
         Assert.Equal(1, result.RemainingLive);
-        Assert.Equal(WorkflowDispatchStatus.Cancelled, (await dispatches.FindAsync(pending.DispatchId))!.Status);
-        Assert.True(WorkflowDispatchLifecycle.IsTestScopeCancellationRequested(
-            (await dispatches.FindAsync(started.DispatchId))!));
+        Assert.Equal(WorkflowDispatchStatus.Cancelled, (await ReadAsync(pending.DispatchId)).Status);
+        Assert.True(WorkflowDispatchLifecycle.IsTestScopeCancellationRequested(await ReadAsync(started.DispatchId)));
+
+        async Task<WorkflowDispatchRecord> ReadAsync(string dispatchId)
+        {
+            var rowId = WorkflowDispatchEfSupport.RowId(tenant, dispatchId);
+            var row = await context.WorkflowDispatches.AsNoTracking().SingleAsync(entry => entry.Id == rowId);
+            return WorkflowDispatchEfSupport.ReadChecked(row, tenant, dispatchId);
+        }
     }
 
     private static WorkflowDispatchRecord Dispatch(string id, WorkflowTestScope scope, DateTimeOffset? createdAt = null)

@@ -28,4 +28,7 @@
     <Compile Include="..\..\..\..\..\..\..\..\..\essentials\tests\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Fixtures/two-zip64.zip" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

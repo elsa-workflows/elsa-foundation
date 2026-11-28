@@ -1,6 +1,30 @@
 # Extension points - Modularity domain
 
-The Modularity API feature owns the shell feature-management surface.
+The Modularity API feature owns the shell feature-management and host module-management surfaces.
+
+## Host module-management endpoints
+
+`AddElsaModuleManagement` and `MapElsaModuleManagement` from
+`Elsa.Modularity.Api.ModuleManagement` opt an ASP.NET Core host into Studio's server module-management
+surface at `/_elsa/module-management`. The registry reports the host owner, configured host identity, active
+packages and feature catalog. Every route uses `ManagementApiKeyAuthentication` and the
+`Elsa:ModuleManagement:ApiKey` setting.
+
+A custom host can compose the surface like this:
+
+```csharp
+builder.Services.AddElsaModuleManagement(options => options.HostOwner = "MyElsaHost");
+// Compose Nuplane admin operations and share their root instances with CShells as required by the host.
+var app = builder.Build();
+app.MapElsaModuleManagement();
+```
+
+The host remains responsible for Nuplane's admin integration and for sharing
+`ManualReconcileCoordinator` and `INuplaneAdminOperations` with shell containers when requests can resolve
+through CShells. The extension adds the feature catalog, registry service and no-op defaults for the host-level
+shell configuration and reload contracts; earlier host registrations are preserved.
+`ModuleManagementApiOptions` controls `HostOwner` (defaults to the ASP.NET Core application name), `HostId`,
+`HostDisplayName` and `ConfigurationFileName`.
 
 ## Requested and runtime features
 

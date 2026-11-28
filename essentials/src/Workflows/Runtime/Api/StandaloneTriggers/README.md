@@ -4,7 +4,7 @@
 
 ## Composition and discovery
 
-Select feature `StandaloneTriggersApi` with its `ApiCapabilities` and `Events` dependencies. Its authoring subset collects installed type sources/validators and initializes the metadata catalog. The selected host must also supply exactly one `IStandaloneTriggerStore`, `IStandaloneTriggerTargetDiscovery` and `ITriggerInputMapper`. Without them, the feature does not advertise its capability. The normal Runtime composition supplies these services; an authoring-only host must supply suitable replacements explicitly.
+Select feature `StandaloneTriggersApi` with its `ApiCapabilities` and `Events` dependencies. It ships in `Elsa.Workflows.Runtime.Api.StandaloneTriggers`. Hosts that list feature assemblies explicitly include the assembly of `StandaloneTriggersApiFeature`. Its authoring subset collects installed type sources/validators and initializes the metadata catalog. The selected host must also supply exactly one `IStandaloneTriggerStore`, `IStandaloneTriggerTargetDiscovery` and `ITriggerInputMapper`. Without them, the feature does not advertise its capability. The normal Runtime composition supplies these services; an authoring-only host must supply suitable replacements explicitly.
 
 The default `AuthoringTriggerCommitter` accepts only never-activated paused resources with disabled associations. When a protected `ITriggerSourceResourceCommitStore` is present, post-configuration selects `ProtectedTriggerManagementCommitter`. Source-specific activation still requires an installed producer descriptor and compatible physical projection/storage. Duplicate selected resource, management-committer, type-catalog, target-discovery or mapper registrations fail configuration.
 
@@ -43,7 +43,7 @@ Delivery controls share change preview/apply and require the latest delivery/rec
 
 `TriggerRequestAccess` binds normalized current subject/tenant and one ordinary persistence scope from trusted request services. It evaluates resource permissions through Foundation Identity. Configuration JSON never chooses actor, tenant, target captures or grants. The seven `triggers:*` / `triggers/deliveries:*` permissions, grant requirements, provider-owned restrictions and accepted-work limits are documented in the [operator guide](../../../../../../docs/standalone-triggers.md#grants-and-publication-changes).
 
-The API owns no durable delivery store or second queue. It reads/writes through the actual selected physical participant, and unavailable capabilities refuse explicitly. Replacing internal projection services or API DTOs is not a public extension path; module authors use the [Core source/model/store contracts](../../Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries).
+The API owns no durable delivery store or second queue. It reads/writes through the actual selected physical participant, and unavailable capabilities refuse explicitly. Replacing internal projection services or API DTOs is not a public extension path; module authors use the [Core source/model/store contracts](../../Core/StandaloneTriggers).
 
 Schedule change review uses the installed module's pure `IStandaloneSchedulePlanner` and the actual owned cursor. It shows current and proposed UTC instants, timezone, offset and preserve/replace/pause/remove action when available. Missing or incompatible readers/planners produce an explicit unavailable preview. Review does not reserve a firing or change a cursor; apply rechecks the resource through the normal physical writer.
 

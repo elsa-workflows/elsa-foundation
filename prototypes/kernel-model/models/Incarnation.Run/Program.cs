@@ -168,7 +168,7 @@ public sealed class IdentityReceiver : CompositeActivity
     public IdentityReceiver() => Births++;
     protected override void Execute(CompositeContext context)
     {
-        if (context.Creation <= 0) throw new InvalidOperationException("C1: receiver has no qualified creation");
+        if (!context.HasExactIdentity) throw new InvalidOperationException("C1: receiver has no qualified creation");
         context.RegisterInputInbox(2, 4, TimeSpan.FromSeconds(1)); context.Schedule(context.Children.Single());
     }
     protected override void OnChildCompleted(CompositeContext context, ChildCompleted child)

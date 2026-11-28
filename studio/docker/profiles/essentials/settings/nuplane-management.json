@@ -1,0 +1,34 @@
+{
+  "Nuplane": {
+    "Setup": {
+      "Feeds": [
+        {
+          "Name": "studio-local-packages",
+          "DirectoryPath": "packages",
+          "IncludePatterns": [
+            "*"
+          ],
+          "Directory": {
+            "Watch": true,
+            "DebounceWindow": "00:00:01"
+          },
+          "Trust": "Trusted"
+        }
+      ]
+    },
+    "Loading": {
+      "Enabled": true
+    },
+    "Reconciliation": {
+      "EnableAutomaticReconciliation": true,
+      "PollInterval": "00:01:00"
+    }
+  },
+  "Studio": {
+    "PackageManagement": {
+      "RetentionPolicy": {
+        "KeepNewestInactiveVersionsPerPackage": null
+      }
+    }
+  }
+}

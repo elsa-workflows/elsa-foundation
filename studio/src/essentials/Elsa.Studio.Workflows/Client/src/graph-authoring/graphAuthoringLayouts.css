@@ -1,0 +1,197 @@
+/*
+ * Graph-authoring arrangement: the palette-less workspace and the theme layouts.
+ *
+ * Imported by GraphAuthoringWorkbench, so it ships in the deferred designer chunk rather than the shared
+ * stylesheet on the landing paths (scripts/check-bundle-size.mjs budgets those). The workbench is the only
+ * surface these rules can apply to, so nothing outside the designer needs them.
+ */
+
+/*
+ * A resource with no left panel (the editorial layout's inline authoring) gives the palette's
+ * columns to the canvas. Structural, not theme-keyed: any host may omit the palette.
+ */
+.wf-editor-body.palette-absent:where(:not(.inspector-maximized)) {
+  grid-template-columns: 0 0 minmax(0, 1fr) 10px var(--wf-inspector-width, 320px);
+}
+
+/* Paint inspector content above opacity-created canvas stacking contexts without trapping canvas dialogs. */
+.wf-editor-body > .wf-inspector { isolation: isolate; }
+
+/*
+ * An open code editor popup (completion, documentation, hover) can extend over the canvas. While one is open, lift the
+ * inspector above the canvas chrome (node actions, Add step, edge actions: z-index 10 at most), below pickers and dialogs.
+ * The floating and focus layouts raise the inspector with more specific selectors, so the rule repeats for them.
+ */
+.wf-editor-body > .wf-inspector:has(.cm-tooltip),
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-inspector:has(.cm-tooltip),
+html[data-workspace-style="focus"] .wf-editor-body > .wf-inspector:has(.cm-tooltip) {
+  z-index: 11;
+}
+
+/* A stale "palette maximized" preference must not hide the canvas when there is no palette. */
+.wf-editor-body.palette-absent.palette-maximized .wf-canvas-shell {
+  display: flex;
+}
+
+.wf-editor-body.palette-absent.palette-maximized .wf-inspector {
+  display: flex;
+  grid-column: 5;
+}
+
+/*
+ * Phone- and 768px-tablet-width workbench (#4695). An open inspector takes the whole workbench as a
+ * sheet, and its header offers the way back to the canvas: side by side, the canvas would be left a
+ * sliver too narrow to read or select. The class comes from useSidePanelLayout, which measures the
+ * workbench rather than the viewport, so wider workbenches keep their docked or floating panels.
+ */
+.wf-editor-body.phone-layout.inspector-sheet {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.wf-editor-body.phone-layout.inspector-sheet > .wf-inspector {
+  grid-column: 1;
+  border-left: 0;
+}
+
+.wf-editor-body.phone-layout.inspector-sheet > :is(.wf-palette, .wf-canvas-shell, .wf-side-resize-handle, .wf-side-resize-spacer) {
+  display: none;
+}
+
+.wf-panel-back-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-panel);
+  color: var(--wf-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: var(--wf-label-weight, 600);
+  padding: 0 10px 0 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.wf-panel-back-button:hover {
+  background: var(--wf-panel-muted);
+}
+
+.wf-panel-back-button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+/*
+ * Theme layouts (docs/design-tokens.md, "Layouts"). Keyed on the host-published
+ * `data-theme-layout` attribute — an arrangement, not a theme — and styled only through tokens.
+ */
+
+/* Floating (Drift): palette and inspector float as islands over a full-bleed canvas. */
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-canvas-shell {
+  grid-row: 1;
+  grid-column: 1 / -1;
+}
+
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-palette,
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-inspector {
+  z-index: 3;
+  grid-row: 1;
+  margin: 12px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-xl);
+  box-shadow: var(--wf-shadow-overlay);
+}
+
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-side-resize-handle,
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout) > .wf-side-resize-spacer {
+  display: none;
+}
+
+/* The canvas's own chrome sits between the islands rather than underneath them. */
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout):not(.palette-maximized):not(.inspector-maximized) > .wf-canvas-shell > :not(.wf-canvas) {
+  margin-right: calc(var(--wf-inspector-width, 320px) + 24px);
+  margin-left: calc(var(--wf-palette-width, 260px) + 24px);
+}
+
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.phone-layout).palette-absent > .wf-canvas-shell > :not(.wf-canvas) {
+  margin-left: 12px;
+}
+
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-canvas-tabs,
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-breadcrumb {
+  border-bottom: 0;
+}
+
+/* Workbench (Schematic): dense palette, drafting-grid canvas, mono panel labels. */
+html[data-theme-layout="workbench"] .wf-panel-title,
+html[data-theme-layout="workbench"] .wf-palette-category-toggle {
+  font-family: var(--studio-font-mono);
+  letter-spacing: 0.08em;
+}
+
+html[data-theme-layout="workbench"] .wf-palette-activity {
+  min-height: 28px;
+  padding-block: 2px;
+  font-size: 12.5px;
+}
+
+html[data-theme-layout="workbench"] .wf-palette-category-toggle {
+  height: 26px;
+}
+
+html[data-theme-layout="workbench"] .wf-canvas {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--wf-border) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--wf-border) 55%, transparent) 1px, transparent 1px);
+  background-size: 90px 90px;
+}
+
+/* Editorial (Atelier): steps are added inline — the connection "+" is always offered, delete on hover. */
+html[data-theme-layout="editorial"] .wf-edge-actions {
+  opacity: 1;
+}
+
+html[data-theme-layout="editorial"] .wf-edge-actions:not(.visible):not(:hover):not(:focus-within):not(.highlighted) .wf-edge-delete {
+  display: none;
+}
+
+.wf-add-step {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+  border: 1px solid var(--wf-accent);
+  border-radius: 999px;
+  background: var(--wf-accent);
+  box-shadow: var(--wf-shadow-menu);
+  color: var(--studio-accent-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  padding: 8px 16px;
+}
+
+.wf-add-step:hover {
+  background: color-mix(in srgb, var(--wf-accent) 88%, var(--wf-text));
+}
+
+.wf-add-step:focus-visible {
+  box-shadow: var(--wf-focus-ring);
+  outline: none;
+}
+
+.wf-add-step:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.wf-workbench-panel-content { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
+.wf-workbench-panel-content[hidden] { display: none; }

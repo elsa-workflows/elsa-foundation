@@ -15,8 +15,8 @@ The initial implementation targets durable coercion with JSON and XML content de
 
 Foundation currently models bindings as durable source references and target types, but does not yet provide a general source-to-target coercion mechanism.
 
-- Activity output capture currently requires the output definition type and target workflow-variable type to match exactly in [`RuntimeOutputCaptureCompiler`](../../Essentials/src/Workflows/Publishing/Api/Services/RuntimeOutputCaptureCompiler.cs).
-- Direct activity-result and variable bindings retype the value envelope but preserve the underlying payload representation in [`RuntimeActivityInputMaterializer`](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputMaterializer.cs).
+- Activity output capture currently requires the output definition type and target workflow-variable type to match exactly in [`RuntimeOutputCaptureCompiler`](../../essentials/src/Workflows/Publishing/Api/Services/RuntimeOutputCaptureCompiler.cs).
+- Direct activity-result and variable bindings retype the value envelope but preserve the underlying payload representation in [`RuntimeActivityInputMaterializer`](https://github.com/elsa-workflows/elsa-foundation/blob/aea76c0b38f18e8037050ea53cef20995ec69a03/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputMaterializer.cs).
 - Expression result coercion handles some `JsonElement`-to-target cases, but a formatted JSON string is not automatically parsed before it reaches a target.
 - Dynamic `Any` values have an established canonical JSON representation and expression-engine boundary through [ADR 0036](../adr/0036-dynamic-any-expression-values-materialize-as-jsonnode-with-per-engine-adapters.md).
 

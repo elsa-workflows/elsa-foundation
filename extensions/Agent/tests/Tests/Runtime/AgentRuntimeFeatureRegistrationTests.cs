@@ -1,3 +1,6 @@
+using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Services;
@@ -47,6 +50,16 @@ public sealed class AgentRuntimeFeatureRegistrationTests
         services.AddScoped<IAgentInvocationInspector, HostInspector>();
         var refusal = await Assert.ThrowsAsync<InvalidOperationException>(() => check.ExecuteAsync(CancellationToken.None));
         Assert.Contains(nameof(IAgentInvocationInspector), refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Malformed_descriptor_json_retains_the_parser_cause()
+    {
+        using var document = JsonDocument.Parse("""{"instructions":{}}""");
+        var node = new ExecutableNode("agent", "agent", "type", "1", new RuntimeActivityDescriptor(AgentRuntimeIds.ConsumerKey, "1", document.RootElement),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
+        var exception = Assert.Throws<AgentTurnException>(() => AgentNativeBinding.Descriptor(node));
+        Assert.IsAssignableFrom<JsonException>(exception.InnerException);
     }
 
     private sealed class HostInspector : IAgentInvocationInspector

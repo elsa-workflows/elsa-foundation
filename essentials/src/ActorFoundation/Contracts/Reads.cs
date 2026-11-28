@@ -1,0 +1,121 @@
+using System.Text.Json.Serialization;
+
+namespace Kernel.Foundation.Contracts;
+
+/// <summary>An opaque continuation for a read.</summary>
+public readonly record struct PageToken(string Value);
+
+public sealed record Page<T>(IReadOnlyList<T> Items, PageToken? Next, long AsOf)
+{
+    /// <summary>The actor's committed revision in this journal snapshot, including an empty page for a live actor.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? JournalHeadRevision { get; init; }
+
+    /// <summary>An opaque bookmark beyond the journal commits visible in this snapshot. Use it to read later commits.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PageToken? JournalCatchUpToken { get; init; }
+
+    /// <summary>The actor's committed cancellation in the same journal snapshot, when retained.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JournalCancellation? JournalCancellation { get; init; }
+}
+
+public sealed record ActorView(ActorHeader Header, string? Selection, ParkView? Park, long AsOf);
+
+public sealed record ActorQuery(
+    string? Type = null,
+    ActorStatus? Status = null,
+    IReadOnlyDictionary<string, string>? Labels = null,
+    long? EndedBefore = null,
+    bool? Parked = null);
+
+public sealed record ParkView(long At, string? OpenResolution);
+
+public sealed record JournalEntry(long Revision, string Entry)
+{
+    /// <summary>The zero-based entry order within the committed revision, when exposed by the reader.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CommitOrdinal { get; init; }
+
+    // Readers may omit the ordinal. Preserve equality for callers comparing journal contents.
+    public bool Equals(JournalEntry? other) => other is not null && Revision == other.Revision && Entry == other.Entry;
+
+    public override int GetHashCode() => HashCode.Combine(Revision, Entry);
+}
+
+public sealed record JournalCancellation(long Revision, long At);
+
+public enum DeliveryState { Pending, Held, Consumed, Arrived }
+
+public sealed record DeliveryView(
+    string Handle,
+    string Id,
+    string Kind,
+    ActorRef? Sender,
+    long? Due,
+    DeliveryState State,
+    int Attempts,
+    long Size);
+
+public interface IActorReads
+{
+    ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken = default);
+
+    ValueTask<Page<ActorView>> ListAsync(BoundScope scope, ActorQuery query, PageToken? from = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>A nonempty page returns a bookmark after its last entry, including when the reader catches up.</summary>
+    ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>Reads kept delivery metadata for a single committed Park mark, under the host's bound tenant.</summary>
+public interface IActorParkInboxReads
+{
+    bool SupportsParkInbox { get; }
+
+    /// <summary>Returns null if the selected mark changed or the Park advanced since the preceding page.</summary>
+    ValueTask<Page<ParkInboxEntry>?> ReadParkInboxAsync(BoundScope scope, ActorRef actor, string selection,
+        PageToken? from = null, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Metadata for one delivery kept by the selected Park.</summary>
+public sealed record ParkInboxEntry(string Handle, string Kind, DeliveryState State, long? Due, int Attempts);
+
+/// <summary>Optional exact read of a completed actor's retained named outputs, under the host's bound scope.</summary>
+public interface IActorTerminalOutputReads
+{
+    /// <summary>Reads the output from the supplied terminal time. A metadata-only read omits the value body.</summary>
+    ValueTask<ActorTerminalOutput?> ReadTerminalOutputAsync(BoundScope scope, ActorRef actor, long endedAt, bool includeValues,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>Optional bounded access to the retained, actor-local sequence of committed journal entries.</summary>
+public interface IActorSequencedJournalReads
+{
+    /// <summary>Whether this configured reader has the sequenced journal installed.</summary>
+    bool SupportsSequencedJournal { get; }
+
+    /// <summary>
+    /// Reads after a sequence through an optional frozen upper sequence. Null denotes a missing actor.
+    /// The reader samples the retained page and sequence bounds in one snapshot.
+    /// </summary>
+    ValueTask<ActorSequencedJournalPage?> ReadSequencedJournalAsync(BoundScope scope, ActorRef actor, long afterSequence,
+        long? upperSequence, int limit, CancellationToken cancellationToken = default);
+}
+
+/// <summary>An actor-local position. A null entry marks a retained position whose content is unavailable.</summary>
+public sealed record SequencedJournalEntry(long Sequence, long Revision, int CommitOrdinal, string? Entry, long RecordedAt);
+
+/// <summary>
+/// One bounded page. Sequences, including the frozen upper bound, belong only to this actor.
+/// Times are Unix milliseconds. An empty sequence has a zero retained lower bound.
+/// </summary>
+public sealed record ActorSequencedJournalPage(IReadOnlyList<SequencedJournalEntry> Items, long RetainedFromSequence,
+    long UpperSequence, long ScannedThroughSequence, long? LastRecordedAt, bool CapturedFromStart, long AsOf);
+
+/// <summary>The authored names as JSON, the complete UTF-8 JSON output object when requested and retained, and its commit time.</summary>
+public sealed record ActorTerminalOutput(long CapturedAt, string Names, bool Omitted, byte[]? Values);

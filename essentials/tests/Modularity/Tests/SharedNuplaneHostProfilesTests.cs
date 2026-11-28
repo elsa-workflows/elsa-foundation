@@ -1,5 +1,4 @@
 using CShells.Nuplane;
-using FoundationHost = Elsa.Foundation.Host.Shells;
 using WorkbenchHost = Elsa.Workbench;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

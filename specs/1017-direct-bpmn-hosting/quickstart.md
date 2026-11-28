@@ -1,5 +1,6 @@
 # Qualification sequence
 
+Run the classic apphost and snapshot-reader commands from their [matching immutable source](../../docs/contributing/workbench-compatibility-tests.md#classic-bpmn-delivery-inspection-and-recovery-probes). Offline receipt verification and fixture restoration remain available in current source.
 
 Restore the pinned original test inputs before building the full solution or running the BPMN test projects:
 

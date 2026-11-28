@@ -14,10 +14,12 @@ Elsa.Decisions.Design.DecisionAssetView
 Elsa.Decisions.Design.DecisionAssetView.<Clone>$() -> Elsa.Decisions.Design.DecisionAssetView!
 Elsa.Decisions.Design.DecisionAssetView.CreatedAt.get -> System.DateTimeOffset
 Elsa.Decisions.Design.DecisionAssetView.CreatedAt.init -> void
-Elsa.Decisions.Design.DecisionAssetView.DecisionAssetView(string! Id, string! Name, string? Description, string! Revision, string! SourceHash, string? Xml, bool IsSensitive, string? PublishedVersionId, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt) -> void
-Elsa.Decisions.Design.DecisionAssetView.Deconstruct(out string! Id, out string! Name, out string? Description, out string! Revision, out string! SourceHash, out string? Xml, out bool IsSensitive, out string? PublishedVersionId, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Decisions.Design.DecisionAssetView.DecisionAssetView(string! Id, string! Name, string? Description, string! Revision, string! SourceHash, string? Xml, bool IsSensitive, string? PublishedVersionId, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt, System.DateTimeOffset? DeletedAt = null) -> void
+Elsa.Decisions.Design.DecisionAssetView.Deconstruct(out string! Id, out string! Name, out string? Description, out string! Revision, out string! SourceHash, out string? Xml, out bool IsSensitive, out string? PublishedVersionId, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt, out System.DateTimeOffset? DeletedAt) -> void
 Elsa.Decisions.Design.DecisionAssetView.Description.get -> string?
 Elsa.Decisions.Design.DecisionAssetView.Description.init -> void
+Elsa.Decisions.Design.DecisionAssetView.DeletedAt.get -> System.DateTimeOffset?
+Elsa.Decisions.Design.DecisionAssetView.DeletedAt.init -> void
 Elsa.Decisions.Design.DecisionAssetView.Equals(Elsa.Decisions.Design.DecisionAssetView? other) -> bool
 Elsa.Decisions.Design.DecisionAssetView.Id.get -> string!
 Elsa.Decisions.Design.DecisionAssetView.Id.init -> void
@@ -75,6 +77,7 @@ Elsa.Decisions.Design.DecisionDesignOptions.RetainDetailedTestHistory.get -> boo
 Elsa.Decisions.Design.DecisionDesignOptions.RetainDetailedTestHistory.set -> void
 Elsa.Decisions.Design.DecisionDesignService
 Elsa.Decisions.Design.DecisionDesignService.CasesAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionCaseView!>!>
+Elsa.Decisions.Design.DecisionDesignService.RecycleBinAsync(Elsa.Decisions.Design.DecisionCaller! caller, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionAssetView!>!>
 Elsa.Decisions.Design.DecisionDesignService.CloneAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, Elsa.Decisions.Design.CloneDecisionRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Design.DecisionAssetView!>
 Elsa.Decisions.Design.DecisionDesignService.DecisionDesignService(Elsa.Decisions.Persistence.Core.IDecisionReader! reader, Elsa.Decisions.Persistence.Core.IDecisionWriter! writer, Elsa.Decisions.Core.IDecisionCompiler! compiler, Elsa.Decisions.Core.IDecisionEvaluator! evaluator, Elsa.Decisions.Design.IDecisionAccessPolicy! policy, Elsa.Decisions.Design.DecisionDesignOptions! options) -> void
 Elsa.Decisions.Design.DecisionDesignService.DeleteCaseAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, string! caseId, string! operationId, string! expectedRevision, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
@@ -90,8 +93,26 @@ Elsa.Decisions.Design.DecisionDesignService.RunsAsync(Elsa.Decisions.Design.Deci
 Elsa.Decisions.Design.DecisionDesignService.SaveAsync(Elsa.Decisions.Design.DecisionCaller! caller, string? id, Elsa.Decisions.Design.SaveDecisionRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Design.DecisionAssetView!>
 Elsa.Decisions.Design.DecisionDesignService.SaveCaseAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, string? caseId, Elsa.Decisions.Design.SaveDecisionCaseRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Design.DecisionCaseView!>
 Elsa.Decisions.Design.DecisionDesignService.TestAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, Elsa.Decisions.Design.TestDecisionRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionTestReceipt!>
+Elsa.Decisions.Design.DecisionDesignService.UnpublishAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, Elsa.Decisions.Design.DecisionLifecycleRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Design.DecisionDesignService.RecycleAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, Elsa.Decisions.Design.DecisionLifecycleRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Design.DecisionDesignService.RestoreAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, Elsa.Decisions.Design.DecisionLifecycleRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
+Elsa.Decisions.Design.DecisionDesignService.PurgeAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, Elsa.Decisions.Design.DecisionLifecycleRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation!>
 Elsa.Decisions.Design.DecisionDesignService.ValidateAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, Elsa.Decisions.Design.ValidateDecisionRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Decisions.Design.DecisionValidation!>
 Elsa.Decisions.Design.DecisionDesignService.VersionsAsync(Elsa.Decisions.Design.DecisionCaller! caller, string! id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Decisions.Design.DecisionVersionView!>!>
+Elsa.Decisions.Design.DecisionLifecycleRequest
+Elsa.Decisions.Design.DecisionLifecycleRequest.<Clone>$() -> Elsa.Decisions.Design.DecisionLifecycleRequest!
+Elsa.Decisions.Design.DecisionLifecycleRequest.DecisionLifecycleRequest(string! OperationId, string! ExpectedRevision) -> void
+Elsa.Decisions.Design.DecisionLifecycleRequest.Deconstruct(out string! OperationId, out string! ExpectedRevision) -> void
+Elsa.Decisions.Design.DecisionLifecycleRequest.Equals(Elsa.Decisions.Design.DecisionLifecycleRequest? other) -> bool
+override Elsa.Decisions.Design.DecisionLifecycleRequest.Equals(object? obj) -> bool
+Elsa.Decisions.Design.DecisionLifecycleRequest.ExpectedRevision.get -> string!
+Elsa.Decisions.Design.DecisionLifecycleRequest.ExpectedRevision.init -> void
+Elsa.Decisions.Design.DecisionLifecycleRequest.OperationId.get -> string!
+Elsa.Decisions.Design.DecisionLifecycleRequest.OperationId.init -> void
+override Elsa.Decisions.Design.DecisionLifecycleRequest.GetHashCode() -> int
+override Elsa.Decisions.Design.DecisionLifecycleRequest.ToString() -> string!
+static Elsa.Decisions.Design.DecisionLifecycleRequest.operator !=(Elsa.Decisions.Design.DecisionLifecycleRequest? left, Elsa.Decisions.Design.DecisionLifecycleRequest? right) -> bool
+static Elsa.Decisions.Design.DecisionLifecycleRequest.operator ==(Elsa.Decisions.Design.DecisionLifecycleRequest? left, Elsa.Decisions.Design.DecisionLifecycleRequest? right) -> bool
 Elsa.Decisions.Design.DecisionTestCaseSelection
 Elsa.Decisions.Design.DecisionTestCaseSelection.<Clone>$() -> Elsa.Decisions.Design.DecisionTestCaseSelection!
 Elsa.Decisions.Design.DecisionTestCaseSelection.DecisionTestCaseSelection(string! Id, string! Revision) -> void

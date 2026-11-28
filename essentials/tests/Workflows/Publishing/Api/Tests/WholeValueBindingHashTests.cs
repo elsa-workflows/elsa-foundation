@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
@@ -13,15 +12,13 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
 /// One node binding every whole-value source kind hashes exactly as it did before member reads existed (#4078 slice A),
-/// as a node payload, as a behavioural executable, as a template behaviour and as an input-snapshot binding
-/// fingerprint. The expected values were computed on a9771131c3, the commit before the model change.
+/// as a node payload, as a behavioural executable and as a template behaviour. The expected values were computed on a9771131c3, the commit before the model change.
 /// </summary>
 public sealed class WholeValueBindingHashTests
 {
     internal const string ExpectedNodePayloadHash = "sha256:129bea357b2a4221859042918b2a001d79e09327fa98744c0897290c560502e9";
     internal const string ExpectedExecutableHash = "sha256:850078a0861e1f58bd6be3d6408e2b3dd38f697315091a492210790a906069af";
     internal const string ExpectedTemplateHash = "sha256:76bdb7e5e8f3ecb8c1ab37c86b3644356c77125d5fbd6fe3e6443a7594f6c0e5";
-    internal const string ExpectedBindingFingerprint = "sha256:b15fdde5265ce2a2fdf22c4f439d7320ea5b9b33164ca97059baa41223ffabe0";
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_node_payload_hash() =>
@@ -35,15 +32,6 @@ public sealed class WholeValueBindingHashTests
     [Fact]
     public void Every_whole_value_kind_keeps_its_template_behaviour_hash() =>
         Assert.Equal(ExpectedTemplateHash, ScopedActivityResultHashTests.TemplateHash(Node()));
-
-    [Fact]
-    public void Every_whole_value_kind_keeps_its_input_snapshot_binding_fingerprint() =>
-        Assert.Equal(ExpectedBindingFingerprint, BindingFingerprint(Node()));
-
-    internal static string BindingFingerprint(ExecutableNode node) =>
-        (string)typeof(RuntimeActivityInputMaterializer)
-            .GetMethod("ComputeBindingFingerprint", BindingFlags.NonPublic | BindingFlags.Static)!
-            .Invoke(null, [node])!;
 
     private static readonly ValueTypeDescriptor Text = new("String");
 

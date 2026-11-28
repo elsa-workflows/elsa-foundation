@@ -1,0 +1,38 @@
+.studio-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--studio-space-2) var(--studio-space-4);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.studio-stepper > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--studio-space-2);
+  color: var(--studio-text-muted);
+  font-size: var(--studio-body-size);
+}
+.studio-stepper > li[aria-current="step"] {
+  color: var(--studio-text);
+  font-weight: 650;
+}
+.studio-stepper-marker {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--studio-border);
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+}
+.studio-stepper > li[aria-current="step"] .studio-stepper-marker {
+  color: var(--studio-action-primary-fg);
+  background: var(--studio-action-primary-bg);
+  border-color: var(--studio-action-primary-bg);
+}
+.studio-stepper > li[data-completed] .studio-stepper-marker {
+  color: var(--studio-success);
+  border-color: currentColor;
+}

@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioExpressionEditorContribution, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, AdvancedSection, StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { ValueInput } from "./CasePanel";
 import { decisionsCapability, failureMessage, type Scalar } from "./decisionsApi";
 import {
@@ -138,7 +138,7 @@ export function DecisionInputsEditor({
 
   return <div className="decision-inputs-editor" ref={rootRef}>
     {!parsed ? <p className="decision-muted">Select a decision to load its input fields from the table. JSON stays available below.</p> : null}
-    {loading ? <p role="status">Loading input fields…</p> : null}
+    {loading ? <SkeletonRows rows={3} label="Loading input fields" /> : null}
     {unpublished ? <StudioAlert tone="warning">This decision has no published version. Publish it before Review &amp; publish; these fields follow the current draft table.</StudioAlert> : null}
     {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
     {missing.length ? <StudioAlert tone="danger">
@@ -179,8 +179,7 @@ export function DecisionInputsEditor({
     )}</div>
       <StudioButton disabled={disabled} onClick={() => commit(removeDecisionInputs(values, extras.map(item => item.name)))}>Remove inputs not in this table</StudioButton>
     </fieldset> : null}
-    <details className="decision-inputs-json">
-      <summary>Advanced JSON</summary>
+    <AdvancedSection label="Advanced JSON">
       <p className="decision-muted">Tagged values update the draft immediately. Kind and value stay exact text.</p>
       <StudioField label="Decision inputs JSON"><textarea
         aria-label="Decision inputs JSON"
@@ -205,6 +204,6 @@ export function DecisionInputsEditor({
         }}
       /></StudioField>
       {jsonError ? <p id={jsonErrorId} role="alert">{jsonError}</p> : null}
-    </details>
+    </AdvancedSection>
   </div>;
 }

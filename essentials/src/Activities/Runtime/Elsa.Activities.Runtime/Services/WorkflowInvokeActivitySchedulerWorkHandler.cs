@@ -305,6 +305,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         ActivityTransition? returnedTransition = null;
         ActivityCompletionProjection? valueFlowCompletion = null;
         ActivityExecutionState? typedSuspendedState = null;
+        DateTimeOffset?[] suspensionDeadlines = [];
         WorkflowDispatchCheckpointRequest? stagedWorkflowDispatch = null;
         IReadOnlyList<RuntimePostCommitIntent> stagedPublishIntents = [];
         ActivityFault? returnedFault = null;
@@ -408,6 +409,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     throw new InvalidOperationException("A stateful suspension transition cannot also participate in structural execution.");
 
                 StatefulSuspensionSupport.ValidateRegistrations(executable, executableNode, statefulSuspension);
+                suspensionDeadlines = statefulSuspension.Registrations.Select(registration => registration.ExpiresAt).ToArray();
                 typedSuspendedState = StatefulActivitySuspensionProjector.Project(
                     stagedState,
                     valueFlowAttempt,
@@ -669,6 +671,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 workItem,
                 invokePayload,
                 typedSuspendedState,
+                suspensionDeadlines,
                 valueSnapshots,
                 stagedWorkflowDispatch,
                 stagedPublishIntents,
@@ -810,6 +813,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         RuntimeSchedulerWorkItem invokeWorkItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState suspendedState,
+        IReadOnlyList<DateTimeOffset?> suspensionDeadlines,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         WorkflowDispatchCheckpointRequest? workflowDispatch,
         IReadOnlyList<RuntimePostCommitIntent> publishIntents,
@@ -839,12 +843,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 valueSnapshots: valueSnapshots,
                 metadata: metadata,
                 cancellationToken: cancellationToken);
+        if (suspendedState.TriggerRegistrations!.Count != suspensionDeadlines.Count)
+            throw new InvalidOperationException("Suspension deadline count does not match its native registrations.");
+        // The deadline is already part of the durable native bookmark command. Keep the
+        // retained registration family unchanged; a crash replays this staged command.
         var bookmarkRequests = suspendedState.TriggerRegistrations!
-            .Select(registration => new ActivityBookmarkRequest(
+            .Select((registration, index) => new ActivityBookmarkRequest(
                 registration.RegistrationId,
                 registration.ResumeTargetKey,
                 registration.StimulusType,
                 registration.StimulusHash,
+                expiresAt: suspensionDeadlines[index],
                 metadata: registration.Metadata))
             .ToArray();
         BookmarkState[] bookmarks = [];

@@ -47,10 +47,10 @@ internal sealed class CompensationReplaySafeValidator(
                 var name = CompensationStepRules.Normalize(step.Name);
                 if (await IsReplaySafeLeafAsync(step.Activity, profiles, cancellationToken))
                     warnings.Add(Warning(node, index, ReplaySafeStepType,
-                        $"\"{name}\" is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none."));
+                        $"\"{name}\" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may not know whether it ran. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make retries safe with an idempotency key."));
                 if (await IsReplaySafeLeafAsync(step.Compensation, profiles, cancellationToken))
                     warnings.Add(Warning(node, index, ReplaySafeHandlerType,
-                        $"The compensation of \"{name}\" is marked safe to repeat, so an undo may run again after a restart without a committed claim. Mark it as an external effect unless it is idempotent and has no effect of its own."));
+                        $"The compensation of \"{name}\" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may run the undo again. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make the undo safe to retry with an idempotency key."));
             }
         }
 

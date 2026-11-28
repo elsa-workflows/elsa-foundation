@@ -1,0 +1,128 @@
+namespace Kernel.Sim;
+
+/// <summary>Exact root references and delivery through the built-in in-memory store.</summary>
+internal static class FoundationReferenceChecks
+{
+    public static async Task Run(Action<bool, string> check)
+    {
+        const string tenant = "acme";
+        var time = 1_700_000_000_000L;
+        var store = new InMemoryStore(1, () => time);
+        var target = InstanceRef.In(0, "acme_order");
+        var first = new Message("creator-1", target, Kinds.Start,
+            Start: new StartSpec("reference-probe", "probe", Creation: new(1, 0, "first")), TargetCreation: 1);
+
+        var proposed = store.ReferenceFor(tenant, new(target.Id, 1));
+        check(store.AddFoundationMessage(tenant, proposed, "uncommitted", "signal") is null && store.Messages.Count == 0,
+            "a prospective ref cannot route before the durable creator is admitted");
+
+        var admitted = store.AdmitFoundationStart(tenant, first);
+        check(store.ReadFoundationActor(tenant, proposed).Actor is null && store.ReadFoundationActors(tenant).Actors.Count == 0,
+            "read models omit the accepted creator while no committed actor row exists");
+        check(admitted == proposed && store.AdmitFoundationStart(tenant, first) == admitted && store.Messages.Count == 1,
+            "the exact ref follows the durable creator and replays without a second creator");
+        check(store.AdmitFoundationStart(tenant, first with { Payload = "changed" }) is null,
+            "the same creator receipt does not admit a changed request");
+        check(store.AddFoundationMessage("other", proposed, "foreign", "signal") is null &&
+              store.AddFoundationMessage(tenant, target.Id, "raw", "signal") is null,
+            "foreign and raw actor ids cannot route as exact refs");
+
+        var oldDue = time + 100;
+        check(store.AddFoundationMessage(tenant, proposed, "deferred-old", "signal", "\"old\"", oldDue) == true &&
+              store.Messages.Values.Single(row => row.Message.Id == "deferred-old").Message.TargetCreation == 1,
+            "an exact send to a pending creator is pinned to its accepted life");
+
+        Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new Probe()]),
+            new WorkerOptions { Monotonic = () => 0 });
+
+        var originalOwner = (await new DurableHost([Owner("original-ref")]).ActivateAsync(0))!;
+        await Pump(originalOwner);
+        check(store.Instances.GetValueOrDefault(target.Id) is { Creation: 1, Retired: false },
+            "the committed creator opens the exact life through the worker");
+        await originalOwner.DisposeAsync();
+
+        await using var nextOwner = (await new DurableHost([Owner("replacement-ref")]).ActivateAsync(0))!;
+        check(store.AddFoundationMessage(tenant, proposed, "before-end", "signal", "\"first\"") == true &&
+              store.AddFoundationMessage(tenant, proposed, "before-end", "signal", "\"first\"") == false,
+            "the same exact ref routes after owner replacement and the same id is a duplicate");
+        await Pump(nextOwner);
+        check(Read() is ["first"], "the replacement applies the exact send once");
+        check(store.AddFoundationMessage(tenant, proposed, "before-end", "signal", """"duplicate"""") == false,
+            "an exact send stays a duplicate after its fenced consumption");
+        check(store.AddFoundationMessage(tenant, proposed, "finish", "finish") == true, "the exact ref can end its own life");
+        await Pump(nextOwner);
+        check(store.Instances.GetValueOrDefault(target.Id)?.Status == InstanceStatus.Finished, "the first life finishes");
+        var endedAt = time;
+        check(store.ReadFoundationActor(tenant, proposed) is { Actor.EndedAt: var ended } && ended == endedAt,
+            "the read snapshot reports the time of the landed end");
+        time--;
+        var page = store.ReadFoundationActors(tenant);
+        check(page.AsOf == time && page.Actors is [{ EndedAt: var recorded }] && recorded == endedAt &&
+              store.ReadFoundationActor("other", proposed).Actor is null,
+            "AsOf follows a clock step back while EndedAt and tenant isolation stay intact");
+        check(store.AddFoundationMessage(tenant, proposed, "delete-first", Kinds.Delete) == true, "a qualified delete is addressed to the first life");
+        await Pump(nextOwner);
+        check(store.Instances.GetValueOrDefault(target.Id) is { Creation: 1, Retired: true } &&
+              store.AddFoundationMessage(tenant, proposed, "after-delete", "signal") is null,
+            "a retired ref refuses a new send");
+        check(store.ReadFoundationActor(tenant, proposed).Actor is null && store.ReadFoundationActors(tenant).Actors.Count == 0,
+            "retirement removes the actor from both bound read snapshots");
+
+        var second = first with { Id = "creator-2", TargetCreation = 2, Start = first.Start! with { Creation = new(2, 1, "second") } };
+        check(store.AdmitFoundationStart("other", second) is null,
+            "a different tenant cannot claim the retired actor's successor");
+        var successor = store.AdmitFoundationStart(tenant, second);
+        check(successor is not null && successor != admitted && store.AdmitFoundationStart(tenant, first) == admitted,
+            "a successor's ref differs and the previous admission still replays to its original life");
+        check(store.AddFoundationMessage(tenant, proposed, "after-recreate", "signal") is null,
+            "an old ref cannot select the successor");
+        if (successor is not null)
+            check(store.AddFoundationMessage(tenant, successor, "second-life", "signal", "\"new\"", keepFor: TimeSpan.FromMilliseconds(105)) == true,
+                "the successor's own ref admits the new send");
+        time = oldDue;
+        await Pump(nextOwner);
+        check(store.Instances.GetValueOrDefault(target.Id) is { Creation: 2, Retired: false } && Read() is ["new"] &&
+              store.Messages.Values.All(row => row.Message.Id != "deferred-old" || row.Done),
+            "delivery discards the old pinned input and applies only the successor's send");
+        check(store.AddFoundationMessage(tenant, proposed, "after-successor-commit", "signal") is null,
+            "the old ref stays unavailable after the successor's first turn lands");
+
+        var peer = InstanceRef.In(0, "acme_peer");
+        var peerRef = store.AdmitFoundationStart(tenant, first with { Id = "peer", Target = peer })!;
+        check(store.AddFoundationMessage(tenant, peerRef, "second-life", "signal", Json.Write("peer")) == true &&
+              store.AddFoundationMessage(tenant, successor, "second-life", "signal", Json.Write("duplicate")) == false,
+            "the same caller id is independent across exact targets");
+        time += 6;
+        check(store.AddFoundationMessage(tenant, successor, "second-life", "signal", Json.Write("after-window")) == true,
+            "a settled id may be reused after its shorter deduplication window, before sweep");
+        await Pump(nextOwner);
+        check(Read() is ["new", "after-window"] && Json.Read<List<string>>(store.Instances[peer.Id].State) is ["peer"],
+            "the actor worker applies the two targets and the post-window replay once each");
+
+        List<string>? Read() => store.Instances.TryGetValue(target.Id, out var row) ? Json.Read<List<string>>(row.State) : null;
+    }
+
+    private static async Task Pump(IScopeActivation activation)
+    {
+        for (var step = 0; step < 20; step++)
+        {
+            await activation.WokenAsync(null);
+            await activation.RunAsync();
+            await Task.Yield();
+        }
+    }
+
+    private sealed class Probe : Model<List<string>>
+    {
+        public override string Key => "reference-probe";
+
+        protected override void Turn(ITurn turn, List<string> state)
+        {
+            foreach (var message in turn.Inbox)
+                if (message.Kind == "signal")
+                    state.Add(message.Read<string>());
+                else if (message.Kind == "finish")
+                    turn.SetStatus(InstanceStatus.Finished);
+        }
+    }
+}
