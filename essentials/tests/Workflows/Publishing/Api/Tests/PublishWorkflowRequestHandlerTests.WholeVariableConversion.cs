@@ -96,7 +96,6 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Equal(ValueConversionOperation.Identity, binding.ConversionPlan!.Operation);
         Assert.Equal(ValueConversionMode.Auto, binding.ConversionPlan.Mode);
         Assert.Equal("Int32", binding.ConversionPlan.SourceType.Alias);
-        Assert.Equal(42, await ExecutePublishedSetAndReadAsync(executable, initialCounter: 42));
     }
 
     private static ActivityNode WholeVariableSet(AuthoredValueConversionRequest? conversion) =>

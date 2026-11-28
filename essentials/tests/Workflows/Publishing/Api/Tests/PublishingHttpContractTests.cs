@@ -2,7 +2,6 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Services;
 using Elsa.Api.AspNetCore;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Serialization.Testing;

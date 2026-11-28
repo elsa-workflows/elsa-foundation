@@ -282,13 +282,14 @@ public sealed class RuntimeSourceMemberContributorTests
         public Captured Capture(WorkflowExecutable item) => new(Codec.EncodeWorkflow(new(Policy.Current, item)));
         public static async Task<Harness> Create(bool cache = true)
         {
-            var h = new Harness(); var services = new ServiceCollection(); services.AddWorkflowRuntime();
+            var h = new Harness();
+            var services = new ServiceCollection();
+            WorkflowPublicationDefaults.Add(services);
             services.AddSingleton<IPersistenceAccessContextAccessor>(new Accessor());
-            new RuntimeEntityFrameworkCoreFeature
+            new RuntimeArtifactsEntityFrameworkCoreFeature
             {
                 Provider = "Sqlite", ConnectionString = "Data Source=" + h._path + ";Pooling=False", CacheWorkflowExecutables = cache,
-                RecoveryContinuationSigningKey = "source-contributor-recovery-key-32-bytes",
-                HierarchyCursorSigningKey = "source-contributor-hierarchy-key-32-bytes"
+                RecoveryContinuationSigningKey = "source-contributor-recovery-key-32-bytes"
             }.ConfigureServices(services);
             new WorkflowReleaseRuntimeFeature().ConfigureServices(services);
             services.AddSingleton<IReleaseRuntimeSourceContextAccessor>(h.Policy); services.AddSingleton<IReleaseRuntimeSourceAuthorization>(h.Policy);
