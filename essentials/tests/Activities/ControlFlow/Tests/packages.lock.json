@@ -506,6 +506,7 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.PreparedSchedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Publications": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.10, )",
@@ -574,6 +575,14 @@
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+        }
+      },
+      "elsa.workflows.runtime.persistence": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )"
         }
       },
       "elsa.workflows.runtime.preparedschedules": {

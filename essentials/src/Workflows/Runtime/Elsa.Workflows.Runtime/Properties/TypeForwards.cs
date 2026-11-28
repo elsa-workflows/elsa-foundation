@@ -1,9 +1,11 @@
 using System.Runtime.CompilerServices;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Values;
 
 [assembly: TypeForwardedTo(typeof(CachingWorkflowExecutableStore))]
+[assembly: TypeForwardedTo(typeof(HmacRuntimeRecoveryContinuationCodec))]
 [assembly: TypeForwardedTo(typeof(InvalidatingWorkflowExecutableStore))]
 [assembly: TypeForwardedTo(typeof(OccupiedActivationSlots))]
 [assembly: TypeForwardedTo(typeof(WorkflowExecutableCache))]
@@ -14,3 +16,4 @@ using Elsa.Workflows.Runtime.Services.Values;
 [assembly: TypeForwardedTo(typeof(WorkflowExecutableHasher))]
 [assembly: TypeForwardedTo(typeof(WorkflowExecutableRootWriteLeaseManager))]
 [assembly: TypeForwardedTo(typeof(RuntimeVariableDeclarationProjector))]
+[assembly: TypeForwardedTo(typeof(ValidateRuntimeRecoveryContinuationCodecStartupTask))]

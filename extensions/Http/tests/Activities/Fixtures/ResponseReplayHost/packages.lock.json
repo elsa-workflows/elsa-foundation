@@ -743,6 +743,7 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.PreparedSchedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Publications": "[4.0.0-dev, )"
         }
@@ -818,6 +819,13 @@
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
+      "elsa.workflows.runtime.persistence": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.persistence.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
@@ -826,6 +834,7 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Persistence": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Publications": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
