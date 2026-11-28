@@ -12,6 +12,7 @@
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.Standalone.EntityFrameworkCore" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Persistence.Artifacts.EntityFrameworkCore" />
     <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <ProjectReference Include="../Core/Elsa.Workflows.Runtime.Core.csproj" />

@@ -8,6 +8,7 @@ using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Serialization.Core;
 using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -17,9 +18,11 @@ using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Workflows.Runtime.Scheduling.Options;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Kernel.Foundation.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -75,13 +78,10 @@ public sealed partial class KernelStandalonePreparedStartTests
                 nextModel.RootActivity, nextModel.ResumeTargets, nextModel.CreatedAt, nextModel.CompatibilityMetadata,
                 material.InputContract!, nextModel.Dependencies, nextModel.IncidentStrategy);
             var signal = Signal("neutral-prepared-event");
-            var legacySignal = Signal("old-pending-event");
             var waitsSignal = Signal("unqualified-waits");
             string sourceId;
-            string legacyId;
-            string legacySourceFingerprint;
 
-            await using (var host = OpenHost(neutral: true))
+            await using (var host = OpenHost())
             {
                 await using var operation = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
                 var services = operation.ServiceProvider;
@@ -92,7 +92,6 @@ public sealed partial class KernelStandalonePreparedStartTests
                 Assert.Same(directTests, services.GetRequiredService<IWorkflowStartDispatcher>());
                 Assert.Null(services.GetService<IRuntimeIngressWaitTarget>());
                 Assert.Null(services.GetService<IStimulusRouter>());
-                Assert.Null(services.GetService<EfRuntimePostCommitOutboxStore>());
                 var outbox = Assert.IsType<EfRuntimePostCommitOutboxStorage>(services.GetRequiredService<IRuntimePostCommitOutboxStore>());
                 Assert.Same(outbox, services.GetRequiredService<IPostCommitOutboxLookupStore>());
                 await services.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
@@ -122,7 +121,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 Assert.NotEqual(activation.ActiveActivationId, replacement.ActiveActivationId);
             }
 
-            await using (var host = OpenHost(neutral: true))
+            await using (var host = OpenHost())
             {
                 var shell = host.GetRequiredService<KernelShellRuntime>();
                 await shell.StartAsync(token);
@@ -165,37 +164,6 @@ public sealed partial class KernelStandalonePreparedStartTests
                 finally { await StopAsync(shell); }
             }
 
-            // A previous owner can still accept using its legacy pipeline. The neutral owner must leave that row for it.
-            await using (var host = OpenHost(neutral: false))
-            {
-                await using var operation = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
-                var old = await Source(operation.ServiceProvider).AdmitAsync(legacySignal, token);
-                Assert.False(old.Replayed);
-                legacyId = old.AdmissionId;
-                var item = await ReadAsync(operation.ServiceProvider, legacyId, token);
-                Assert.Equal(RuntimeRecipientPhase.Pending, Progress(item).Phase);
-                legacySourceFingerprint = item.SourceFingerprint;
-            }
-            await using (var host = OpenHost(neutral: true))
-            {
-                await using var operation = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
-                var services = operation.ServiceProvider;
-                await Assert.ThrowsAsync<NotSupportedException>(() => Source(services).AdmitAsync(legacySignal, token).AsTask());
-                await Assert.ThrowsAsync<NotSupportedException>(() => services.GetRequiredService<IRuntimePostCommitOutboxProcessor>()
-                    .ProcessAsync(new(10), token).AsTask());
-            }
-            await using (var host = OpenHost(neutral: false))
-            {
-                await using var operation = await host.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
-                var prior = await Source(operation.ServiceProvider).AdmitAsync(legacySignal, token);
-                Assert.True(prior.Replayed);
-                var item = await ReadAsync(operation.ServiceProvider, prior.AdmissionId, token);
-                Assert.Equal((legacyId, legacySourceFingerprint, RuntimeRecipientPhase.Pending),
-                    (item.OutboxItemId, item.SourceFingerprint, Progress(item).Phase));
-                Assert.Equal((0, 0L), (item.DeliveryAttemptCount, item.DeliveryFencingToken));
-                Assert.Null(item.DeliveringOwnerId);
-            }
-
             async Task AssertHistoricalIdentityFenceAsync(IServiceProvider prepared, IRuntimeIngressDeliveryStore ingress)
             {
                 var historicalSignal = Signal("historical-execution-conflict");
@@ -207,19 +175,45 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var executionId = new RuntimeSubscriptionStartIdentity(RuntimeSubscriptionStartIdentity.CurrentVersion,
                     Persistence, source, subscription.Id).WorkflowExecutionId;
 
-                await using var legacy = OpenHost(neutral: false);
-                await using var operation = await legacy.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
-                var executions = operation.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
-                await executions.SaveAsync(new(executionId, material.Identity, WorkflowExecutionStatus.Completed, null,
-                    clock.GetUtcNow(), null, null, clock.GetUtcNow(), null, null, Persistence.Value,
-                    new Dictionary<string, string>()), token);
-
+                var context = prepared.GetRequiredService<RuntimeDbContext>();
+                var scope = Persistence.Value;
+                var now = clock.GetUtcNow();
+                var historical = new WorkflowExecutionState(executionId, material.Identity, WorkflowExecutionStatus.Completed, null,
+                    now, null, null, now, null, null, scope, new Dictionary<string, string>());
+                var row = new WorkflowExecutionStateEntity
+                {
+                    Id = EfRelationalIdentity.Hash($"workflow-execution:{scope.Length}:{scope}{executionId.Length}:{executionId}"),
+                    ScopeKey = EfRelationalIdentity.Encode(scope), ScopeKeyHash = EfRelationalIdentity.Hash(scope),
+                    WorkflowExecutionId = EfRelationalIdentity.Encode(executionId), WorkflowExecutionIdHash = EfRelationalIdentity.Hash(executionId),
+                    WorkflowExecutionIdOrderKey = LegacyExecutionOrderKey(executionId),
+                    TenantId = EfRelationalIdentity.Encode(scope), TenantIdHash = EfRelationalIdentity.Hash(scope),
+                    DefinitionId = EfRelationalIdentity.Encode(Definition), DefinitionIdHash = EfRelationalIdentity.Hash(Definition),
+                    ArtifactId = EfRelationalIdentity.Encode(material.Identity.ArtifactId), ArtifactIdHash = EfRelationalIdentity.Hash(material.Identity.ArtifactId),
+                    ArtifactIdOrderKey = LegacyExecutionOrderKey(material.Identity.ArtifactId),
+                    Status = (int)historical.Status, RunKind = (int)historical.RunKind, SortTimestampUtcTicks = now.UtcTicks,
+                    ContentJson = JsonSerializer.Serialize(historical, WebJson), SchemaVersion = RuntimeWorkflowExecutionEfModule.SchemaVersion, Revision = 1
+                };
+                context.WorkflowExecutionStates.Add(row);
+                await context.SaveChangesAsync(token);
                 await AssertConflictAsync("The deterministic target identity was already used before admission.");
-                Assert.NotNull(await executions.FindAsync(executionId, token));
-                Assert.True(await executions.DeleteAsync(executionId, token));
-                Assert.Null(await executions.FindAsync(executionId, token));
-                Assert.True(await executions.IsDeletionTombstonedAsync(executionId, token));
+                Assert.True(await KernelRuntimeFixture.HasClassicExecutionAsync(prepared, executionId, token));
+
+                context.WorkflowExecutionStates.Remove(row);
+                var tombstone = new ExecutionLivenessState(RuntimeExecutionOwnershipStateId.For(executionId), executionId,
+                    null, null, null, null, [], new Dictionary<string, string>
+                    {
+                        [RuntimeMetadataKeys.OwnershipFencingToken] = "0",
+                        [RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true"
+                    });
+                var physicalTombstone = EfRuntimeExecutionLivenessRow.ToEntity(context, tombstone, scope, 1);
+                context.ExecutionLivenessStates.Add(physicalTombstone);
+                await context.SaveChangesAsync(token);
+                Assert.False(await KernelRuntimeFixture.HasClassicExecutionAsync(prepared, executionId, token));
+                Assert.True(await EfRuntimeExecutionLivenessRow.IsWorkflowExecutionDeletionTombstonedAsync(context, scope, executionId, token));
                 await AssertConflictAsync("A saved cohort execution dependency was retired before acceptance.");
+
+                static string LegacyExecutionOrderKey(string identity) => Convert.ToHexString(
+                    EfRelationalIdentity.CreateOrderKey(identity, RuntimeWorkflowExecutionEfModule.IdentityMaximumLength));
 
                 async Task AssertConflictAsync(string reason)
                 {
@@ -230,7 +224,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 }
             }
 
-            ServiceProvider OpenHost(bool neutral, bool authoredOnly = false, PersistenceScope? relayScope = null)
+            ServiceProvider OpenHost(bool authoredOnly = false, PersistenceScope? relayScope = null)
             {
                 var services = new ServiceCollection();
                 services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
@@ -238,30 +232,18 @@ public sealed partial class KernelStandalonePreparedStartTests
                 services.AddSingleton<TimeProvider>(clock);
                 services.AddSingleton<IWellKnownTypeRegistry, KernelPublishedExecuteTests.FixtureTypes>();
                 new EventsFeature().ConfigureServices(services);
-                if (neutral)
+                new ActivitiesPrimitivesFeature().ConfigureServices(services);
+                WorkflowPublicationDefaults.Add(services);
+                new RuntimeArtifactsEntityFrameworkCoreFeature
                 {
-                    new ActivitiesPrimitivesFeature().ConfigureServices(services);
-                    services.AddWorkflowActivationDefaults();
-                    new RuntimeArtifactsEntityFrameworkCoreFeature
-                    {
-                        Provider = provider, ConnectionString = runtime, RecoveryContinuationSigningKey = new string('r', 32)
-                    }.ConfigureServices(services);
-                    new RuntimePublicationEntityFrameworkCoreFeature().ConfigureServices(services);
-                    new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
-                    new WorkflowsRuntimePreparedStandaloneSourcePumpFeature().ConfigureServices(services);
-                    new WorkflowsRuntimePreparedStandaloneRecurringTriggersFeature().ConfigureServices(services);
-                    new PreparedStandaloneScheduleTriggersFeature().ConfigureServices(services);
-                    services.Configure<RecurringTriggerPumpOptions>(options => options.MaxSchedulesPerTick = 1);
-                }
-                else
-                {
-                    services.AddWorkflowRuntime();
-                    services.AddRuntimeEntityFrameworkCore(new()
-                    {
-                        Provider = provider, ConnectionString = runtime,
-                        RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
-                    });
-                }
+                    Provider = provider, ConnectionString = runtime, RecoveryContinuationSigningKey = new string('r', 32)
+                }.ConfigureServices(services);
+                new RuntimePublicationEntityFrameworkCoreFeature().ConfigureServices(services);
+                new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
+                new WorkflowsRuntimePreparedStandaloneSourcePumpFeature().ConfigureServices(services);
+                new WorkflowsRuntimePreparedStandaloneRecurringTriggersFeature().ConfigureServices(services);
+                new PreparedStandaloneScheduleTriggersFeature().ConfigureServices(services);
+                services.Configure<RecurringTriggerPumpOptions>(options => options.MaxSchedulesPerTick = 1);
                 if (!authoredOnly)
                 {
                     services.AddStandaloneTriggerIngress<FixtureEvent>(new("event", 1, EventFamily, EventSchema));
@@ -271,7 +253,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 }
                 new WorkflowsRuntimeKernelHostingFeature
                 {
-                    Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = neutral
+                    Provider = provider, SqlitePath = path, PostgresConnectionString = foundation, PreparedStandaloneStarts = true
                 }.ConfigureServices(services);
                 if (relayScope is not null)
                     services.AddSingleton<IRuntimeAuthoredStandaloneEventAvailability>(new PublishedEventAvailability(relayScope));
@@ -306,7 +288,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var firstWrite = TriggerWrite(slot, first, "event", new { eventName }) with { ObservedTargets = null };
                 foreach (var wrongScope in new PersistenceScope?[] { null, new("another-tenant") })
                 {
-                    await using var inactive = OpenHost(neutral: true, authoredOnly: true, relayScope: wrongScope);
+                    await using var inactive = OpenHost(authoredOnly: true, relayScope: wrongScope);
                     await using var operation = await inactive.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
                     var committer = operation.ServiceProvider.GetRequiredService<ITriggerManagementCommitter>();
                     Assert.False(committer.CanActivateType("event", 1));
@@ -315,7 +297,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                     Assert.Equal("unavailable", unavailable.Code);
                 }
 
-                await using var active = OpenHost(neutral: true, authoredOnly: true, relayScope: Persistence);
+                await using var active = OpenHost(authoredOnly: true, relayScope: Persistence);
                 await using var management = await active.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
                 var authoring = management.ServiceProvider.GetRequiredService<ITriggerManagementCommitter>();
                 Assert.True(authoring.CanActivateType("event", 1));
@@ -388,7 +370,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 async Task AssertCohortGateAsync()
                 {
                     const string familyName = "RuntimeAuthoredEventCohort";
-                    await using var gated = OpenHost(neutral: true, authoredOnly: true, relayScope: Persistence);
+                    await using var gated = OpenHost(authoredOnly: true, relayScope: Persistence);
                     await using var scope = await gated.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
                     var gatedServices = scope.ServiceProvider;
                     var db = gatedServices.GetRequiredService<RuntimeDbContext>();

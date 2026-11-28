@@ -245,12 +245,7 @@ public sealed partial class KernelPublishedExecuteTests
         if (inline || recordEphemeralTestCompletion is false) builder.Services.AddSingleton<IJavaScriptScriptEvaluator>(scripts);
         builder.Services.AddSingleton(new WorkflowHttpEndpointSettings("/fixture/workflows", TimeSpan.FromSeconds(3), 4096,
             (context, _, _) => { context.Response.StatusCode = 504; return ValueTask.CompletedTask; }));
-        builder.Services.AddWorkflowRuntime();
-        builder.Services.AddRuntimeEntityFrameworkCore(new()
-        {
-            Provider = provider, ConnectionString = runtime,
-            RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
-        });
+        KernelRuntimeFixture.Add(builder.Services, provider, runtime);
         var pinBoundary = new PinBoundary();
         var pinDescriptor = builder.Services.Last(item => item.ServiceType == typeof(IRuntimeKernelExecutablePinStore));
         builder.Services.Remove(pinDescriptor);
@@ -259,7 +254,7 @@ public sealed partial class KernelPublishedExecuteTests
         var retainedApi = new WorkflowsRuntimeKernelRetainedApiFeature();
         retainedApi.ConfigureServices(builder.Services);
         if (recordEphemeralTestCompletion is { } record)
-            builder.Services.AddPersistenceModeOptions(new PersistenceModeOptions { RecordCompletion = record });
+            builder.Services.AddSingleton(new PersistenceModeOptions { RecordCompletion = record });
         var kernel = new WorkflowsRuntimeKernelFeature();
         kernel.ConfigureServices(builder.Services);
         var kernelHosting = new WorkflowsRuntimeKernelHostingFeature
@@ -1019,7 +1014,7 @@ public sealed partial class KernelPublishedExecuteTests
                         Assert.False(first.Dispatch.TestRunCompletedWithoutRecord);
                         Assert.Equal(first.Dispatch.WorkflowExecutionId, reply.Headers["x-elsa-workflow-instance-id"]);
                         Assert.True((await production.GetAsync(new(first.Dispatch.WorkflowExecutionId), token)).Missing);
-                        Assert.Null(await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(first.Dispatch.WorkflowExecutionId, token));
+                        Assert.False(await KernelRuntimeFixture.HasClassicExecutionAsync(services, first.Dispatch.WorkflowExecutionId, token));
                         return;
                     }
 
@@ -1181,7 +1176,7 @@ public sealed partial class KernelPublishedExecuteTests
                             Assert.Equal(parent.Id, run.Run.TestStart?.RootActor);
                             Assert.Equal(logicalDefinition ?? selected.Identity.DefinitionId, run.Run.Definition);
                             Assert.True((await production.GetAsync(actor, token)).Missing);
-                            Assert.Null(await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(actor.Id, token));
+                            Assert.False(await KernelRuntimeFixture.HasClassicExecutionAsync(services, actor.Id, token));
                             found.Add(actor);
                         }
                         if (found.Count != 0) return Assert.Single(found);
@@ -1278,7 +1273,7 @@ public sealed partial class KernelPublishedExecuteTests
                 var actor = new Contract.ActorRef(receipt.WorkflowExecutionId);
                 Assert.Equal(actor.Id, durable.IsolatedActor?.ActorReference);
                 Assert.True((await production.GetAsync(actor, token)).Missing);
-                Assert.Null(await author.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(actor.Id, token));
+                Assert.False(await KernelRuntimeFixture.HasClassicExecutionAsync(author, actor.Id, token));
                 var read = (await isolated.GetAsync(actor, token)).Run;
                 Assert.NotNull(read);
                 Assert.Equal(test.ScopeId, read.Value.Run.TestStart?.ScopeId);
@@ -1570,7 +1565,7 @@ public sealed partial class KernelPublishedExecuteTests
                     Assert.True(await dispatcher.IsStoppedAsync(test, actor.Id, token));
                     Assert.Equal(Contract.ActorStatus.Cancelled, (await privateRuns.GetAsync(actor, token)).Run?.View.Header.Status);
                     Assert.True((await real.GetAsync(actor, token)).Missing);
-                    Assert.Null(await author.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(actor.Id, token));
+                    Assert.False(await KernelRuntimeFixture.HasClassicExecutionAsync(author, actor.Id, token));
                     return;
                 }
                 Contract.ActorView? view;
@@ -1581,7 +1576,7 @@ public sealed partial class KernelPublishedExecuteTests
                 } while (view is null || view.Header.Status == Contract.ActorStatus.Running);
                 Assert.Equal(Contract.ActorStatus.Finished, view.Header.Status);
                 Assert.True((await real.GetAsync(actor, token)).Missing);
-                Assert.Null(await author.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(actor.Id, token));
+                Assert.False(await KernelRuntimeFixture.HasClassicExecutionAsync(author, actor.Id, token));
                 using var inspect = new HttpRequestMessage(HttpMethod.Get, $"/runtime/workflows/instances/{actor.Id}");
                 inspect.Headers.Add("X-Fixture-Subject", "accepted");
                 inspect.Headers.Add("X-Fixture-Tenant", Scope.Value);

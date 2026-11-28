@@ -31,6 +31,7 @@ using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
 using Elsa.Workflows.Runtime.KernelHosting;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Kernel.Foundation.Hosting;
 using Kernel.Native;
@@ -221,16 +222,15 @@ public sealed partial class KernelStandalonePreparedStartTests
                         return saved;
                     }
 
-                    var bookmarks = new EfBookmarkStateStore(services.GetRequiredService<RuntimeDbContext>(),
-                        services.GetRequiredService<IPersistenceAccessContextAccessor>());
-                    var retainedWait = new BookmarkState("legacy-wait", "legacy-execution", "activity", "node", "resume",
-                        HttpEndpointStimulus.StimulusType, HttpEndpointStimulus.Hash(heldTemplate, "POST"), null,
-                        new Dictionary<string, string>(), DateTimeOffset.UtcNow, null);
-                    await bookmarks.SaveAsync(retainedWait, token);
+                    var context = services.GetRequiredService<RuntimeDbContext>();
+                    var retainedWait = LegacyBookmarkRow(heldTemplate);
+                    context.Bookmarks.Add(retainedWait);
+                    await context.SaveChangesAsync(token);
                     using var blocked = await RequestAsync(client, heldPath, HeldKey);
                     await ExpectStatusAsync(blocked, HttpStatusCode.ServiceUnavailable);
                     Assert.Null(await ingress.FindDeliveryAsync(DeliveryScope, heldSource, token));
-                    Assert.True(await bookmarks.DeleteAsync(retainedWait.WorkflowExecutionId, retainedWait.BookmarkId, token));
+                    context.Bookmarks.Remove(retainedWait);
+                    await context.SaveChangesAsync(token);
                     if (actorWaits)
                     {
                         using var charset = new StringContent(WaitBody, Encoding.Latin1, "text/plain");
@@ -431,7 +431,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 services.AddSingleton<IWellKnownTypeRegistry, KernelPublishedExecuteTests.FixtureTypes>();
                 services.AddSingleton<IPortableExpressionEvaluator>(expressions);
                 new EventsFeature().ConfigureServices(services);
-                services.AddWorkflowActivationDefaults();
+                WorkflowPublicationDefaults.Add(services);
                 new RuntimeArtifactsEntityFrameworkCoreFeature
                 {
                     Provider = provider, ConnectionString = runtime, RecoveryContinuationSigningKey = new string('r', 32)
@@ -440,8 +440,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
                 new HttpFeature(new ShellFeatureContext(new ShellSettings { Id = new ShellId("qualification") }, [])).ConfigureServices(services);
                 new StandaloneHttpTriggerAuthoringFeature().ConfigureServices(services);
-                var runtimeHttp = new WorkflowsRuntimeStandaloneHttpFeature();
-                runtimeHttp.ConfigureServices(services);
+                new WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(services);
                 var activities = new KernelActivitiesHttpFeature { SyncRequestTimeout = timeout };
                 activities.ConfigureServices(services);
                 if (actorWaits)
@@ -461,7 +460,6 @@ public sealed partial class KernelStandalonePreparedStartTests
                 var kernel = new WorkflowsRuntimeKernelFeature();
                 kernel.ConfigureServices(services);
                 kernel.PostConfigureServices(services);
-                runtimeHttp.PostConfigureServices(services);
                 activities.PostConfigureServices(services);
                 var app = builder.Build();
                 app.UseAuthentication();
@@ -644,6 +642,33 @@ public sealed partial class KernelStandalonePreparedStartTests
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
         }
     }
+    private static BookmarkStateEntity LegacyBookmarkRow(string routeTemplate)
+    {
+        var scope = Persistence.Value;
+        var state = new BookmarkState("legacy-wait", "legacy-execution", "activity", "node", "resume", HttpEndpointStimulus.StimulusType,
+            HttpEndpointStimulus.Hash(routeTemplate, "POST"), null, new Dictionary<string, string>(), DateTimeOffset.UtcNow, null);
+        return new BookmarkStateEntity
+        {
+            Id = EfRelationalIdentity.HashLengthFramed(scope, state.WorkflowExecutionId, state.BookmarkId),
+            ScopeKey = EfRelationalIdentity.Encode(scope), ScopeKeyHash = EfRelationalIdentity.Hash(scope),
+            WorkflowExecutionId = state.WorkflowExecutionId, WorkflowExecutionIdHash = EfRelationalIdentity.Hash(state.WorkflowExecutionId),
+            WorkflowExecutionIdOrderKey = LegacyOrdinalKey(state.WorkflowExecutionId),
+            BookmarkId = state.BookmarkId, BookmarkIdHash = EfRelationalIdentity.Hash(state.BookmarkId),
+            BookmarkIdOrderKey = LegacyOrdinalKey(state.BookmarkId),
+            ActivityExecutionId = state.ActivityExecutionId, ExecutableNodeId = state.ExecutableNodeId, ResumeTargetId = state.ResumeTargetId,
+            StimulusType = state.StimulusType, StimulusHash = state.StimulusHash,
+            StimulusLookupKey = EfBookmarkStimulusEvidence.LookupKey(state.StimulusType, state.StimulusHash),
+            StimulusTypeLookupKey = EfRelationalIdentity.Hash(state.StimulusType),
+            ContentJson = JsonSerializer.Serialize(state, WebJson), MetadataJson = "{}", SchemaVersion = BookmarkStateEfModule.SchemaVersion,
+            CreatedAtUtcTicks = state.CreatedAt.UtcTicks, Revision = 1
+        };
+
+        static string LegacyOrdinalKey(string value) => string.Concat(value.Select(character =>
+            ((int)character).ToString("D5", System.Globalization.CultureInfo.InvariantCulture))) +
+            new string('0', (BookmarkStateEfModule.WorkflowIdentityMaximumLength - value.Length) * 5) +
+            value.Length.ToString("D5", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     private static async Task EnablePreparedRuntimeSchemaAsync(WebApplication host, CancellationToken token)
     {
         await host.Services.GetRequiredService<EfModuleMigrator<RuntimeDbContext>>().InitializeAsync(token);

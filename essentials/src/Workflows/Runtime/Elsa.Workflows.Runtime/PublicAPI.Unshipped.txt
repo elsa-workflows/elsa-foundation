@@ -1,11 +1,11 @@
 #nullable enable
 Elsa.Workflows.Runtime.Services.Values.RuntimeActivityInputMaterializer.RuntimeActivityInputMaterializer(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeInputBindingResolver! inputBindingResolver, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy!>! structurePolicies, Elsa.Serialization.Core.IWellKnownTypeRegistry? wellKnownTypeRegistry = null, Elsa.Expressions.Core.Contracts.IPortableExpressionEvaluator? portableExpressionEvaluator = null, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeValueConversionExecutor? valueConversionExecutor = null, Elsa.Workflows.Runtime.Core.Contracts.IExternalPayloadStore? externalPayloadStore = null) -> void
-Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature
-Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.AllowAdHocChannels.get -> bool
-Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.AllowAdHocChannels.set -> void
-Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.Channels.get -> System.Collections.Generic.List<Elsa.Workflows.Runtime.Core.Models.ActivationChannelDefinition!>!
-Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.Channels.set -> void
-Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.WorkflowsActivationChannelsFeature() -> void
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature (forwarded, contained in Elsa.Workflows.Runtime.Publications)
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.AllowAdHocChannels.get -> bool (forwarded, contained in Elsa.Workflows.Runtime.Publications)
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.AllowAdHocChannels.set -> void (forwarded, contained in Elsa.Workflows.Runtime.Publications)
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.Channels.get -> System.Collections.Generic.List<Elsa.Workflows.Runtime.Core.Models.ActivationChannelDefinition!>! (forwarded, contained in Elsa.Workflows.Runtime.Publications)
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.Channels.set -> void (forwarded, contained in Elsa.Workflows.Runtime.Publications)
+Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.WorkflowsActivationChannelsFeature() -> void (forwarded, contained in Elsa.Workflows.Runtime.Publications)
 Elsa.Workflows.Runtime.Attention.IWorkflowRuntimeAttentionQuery (forwarded, contained in Elsa.Workflows.Runtime.Attention)
 Elsa.Workflows.Runtime.Attention.IWorkflowRuntimeAttentionQuery.QueryAsync(Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionQuery! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionSnapshot!> (forwarded, contained in Elsa.Workflows.Runtime.Attention)
 Elsa.Workflows.Runtime.Attention.IWorkflowRuntimePlacementAttention (forwarded, contained in Elsa.Workflows.Runtime.Attention)
@@ -1828,7 +1828,7 @@ static readonly Elsa.Workflows.Runtime.Attention.WorkflowRuntimeAttentionRecords
 static readonly Elsa.Workflows.Runtime.Diagnostics.NullWorkflowEngineTracer.Instance -> Elsa.Workflows.Runtime.Diagnostics.NullWorkflowEngineTracer!
 static readonly Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames -> System.Collections.Generic.IReadOnlySet<string!>!
 static readonly Elsa.Workflows.Runtime.Services.Executions.NoopWorkflowExecutionCommandExecutor.Instance -> Elsa.Workflows.Runtime.Services.Executions.NoopWorkflowExecutionCommandExecutor!
-virtual Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void (forwarded, contained in Elsa.Workflows.Runtime.Publications)
 virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke(TClaim! claim, System.DateTimeOffset now, System.TimeSpan visibilityTimeout, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TClaim?> (forwarded, contained in Elsa.Workflows.Runtime.Core)
 ~override Elsa.Workflows.Runtime.Services.ActivityExecutions.InMemoryActivityExecutionStateStore.ActivityExecutionStateKey.Equals(object obj) -> bool
 ~override Elsa.Workflows.Runtime.Services.ActivityExecutions.InMemoryActivityExecutionStateStore.ActivityExecutionStateKey.ToString() -> string

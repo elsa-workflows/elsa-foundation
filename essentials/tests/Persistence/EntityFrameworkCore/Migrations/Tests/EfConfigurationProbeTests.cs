@@ -19,7 +19,6 @@ using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Resumption;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -32,8 +31,8 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 public sealed class EfConfigurationProbeTests : IDisposable
 {
     private const string Shell = "persistence-probe";
-    private const string Runtime = "WorkflowsRuntimeEntityFrameworkCore";
-    private const string RuntimeWorkflowExecution = "WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence";
+    private const string Runtime = "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence";
+    private const string RuntimeTestScope = "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence";
     private const string StructuredLogs = "DiagnosticsStructuredLogsEntityFrameworkCore";
     private const string OpenTelemetry = "DiagnosticsOpenTelemetryEntityFrameworkCore";
     private const string ConnectionCanary = "connection-value-canary-2172";
@@ -45,13 +44,10 @@ public sealed class EfConfigurationProbeTests : IDisposable
     {
         typeof(EfToolingHostTests).Assembly,
         typeof(RuntimeDbContext).Assembly,
-        typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimeArtifactsEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimePreparedStandaloneEntityFrameworkCoreFeature).Assembly,
         typeof(StructuredLogsEntityFrameworkCoreFeature).Assembly,
         typeof(EfOpenTelemetryFeature).Assembly,
-        typeof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature).Assembly,
-        typeof(WorkflowsRuntimeResumptionFeature).Assembly,
         typeof(TasksFeature).Assembly,
         typeof(StructuredLogsFeature).Assembly,
         typeof(OpenTelemetryFeature).Assembly
@@ -70,7 +66,6 @@ public sealed class EfConfigurationProbeTests : IDisposable
         Assert.Null(run.RuntimeFailure);
         Assert.Empty(run.RuntimeDetails.RefusalCodes);
         Assert.Equal(6, run.RuntimePatch!.ConfigurationData.Count);
-        Assert.Contains("WorkflowsRuntimeResumption", run.RuntimeContext.ImplicitFeatureIds);
         Assert.Contains("Tasks", run.RuntimeContext.ImplicitFeatureIds);
         Assert.Contains("DiagnosticsStructuredLogs", run.RuntimeContext.ImplicitFeatureIds);
         Assert.Contains("DiagnosticsOpenTelemetry", run.RuntimeContext.ImplicitFeatureIds);
@@ -479,7 +474,7 @@ public sealed class EfConfigurationProbeTests : IDisposable
         else if (options.RuntimePair)
         {
             features[Runtime] = Feature(schema: options.SchemaMismatch ? "runtime-schema-a" : null);
-            features[RuntimeWorkflowExecution] = Feature(schema: options.SchemaMismatch ? "runtime-schema-b" : null);
+            features[RuntimeTestScope] = Feature(schema: options.SchemaMismatch ? "runtime-schema-b" : null);
         }
 
         var persistence = new JsonObject();
@@ -491,7 +486,7 @@ public sealed class EfConfigurationProbeTests : IDisposable
         }
         else if (options.RuntimePair)
         {
-            persistence["Bindings"] = new JsonObject { [RuntimeWorkflowExecution] = "runtime-other" };
+            persistence["Bindings"] = new JsonObject { [RuntimeTestScope] = "runtime-other" };
         }
         else if (!options.AllLegacy)
         {
@@ -526,7 +521,7 @@ public sealed class EfConfigurationProbeTests : IDisposable
         if (options.MixedDiagnostics)
             persistence["Bindings"] = new JsonObject { [StructuredLogs] = "logs-production" };
         else if (options.RuntimePair)
-            persistence["Bindings"] = new JsonObject { [RuntimeWorkflowExecution] = "runtime-other" };
+            persistence["Bindings"] = new JsonObject { [RuntimeTestScope] = "runtime-other" };
         else if (!options.AllLegacy && options.IncludeRootDefault)
         {
             var bindings = DiagnosticBindings(options.SameDiagnosticsReference, production: true);

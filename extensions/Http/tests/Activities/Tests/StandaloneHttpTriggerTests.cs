@@ -2,10 +2,9 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
-using Elsa.Activities.Http.Options;
-using Elsa.Activities.Http.Services;
-using Elsa.Activities.Http.StandaloneTriggers;
 using Elsa.Activities.Testing;
+using Elsa.Activities.Http.Options;
+using Elsa.Activities.Http.StandaloneTriggers;
 using Elsa.Http.Core;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
@@ -14,9 +13,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
-using Elsa.Workflows.Runtime.Services.ActivityExecutions;
-using Elsa.Workflows.Runtime.Services.Bookmarks;
-using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -102,11 +98,8 @@ public sealed class StandaloneHttpTriggerTests
     public async Task Workflow_response_observes_an_instruction_from_a_fresh_scope_without_passing_the_exchange_to_a_workflow()
     {
         using var fixture = new Fixture(mode: "WorkflowResponse");
-        var original = await HttpResponseInstructionFixture.StoreWith(new(201, new Dictionary<string, string[]>(),
-            JsonSerializer.SerializeToElement("peer-response"), "text/plain"));
-        foreach (var activity in await original.ListAllAsync("wf-1"))
-            await fixture.Activities.SaveAsync(activity with { Execution = activity.Execution with {
-                WorkflowExecutionId = fixture.Receipt.Item.SubscriptionDelivery!.Recipients[0].StartIdentity.WorkflowExecutionId } });
+        fixture.RetainedResponse = new(RuntimeStandaloneHttpResponseState.Ready, "actor-response", 201, "text/plain",
+            JsonSerializer.SerializeToElement("peer-response"), new Dictionary<string, string>());
         await fixture.InvokeAsync();
         Assert.Equal(201, fixture.Http.Response.StatusCode);
         Assert.Equal("peer-response", Encoding.UTF8.GetString(((MemoryStream)fixture.Http.Response.Body).ToArray()));
@@ -128,11 +121,7 @@ public sealed class StandaloneHttpTriggerTests
     public async Task Workflow_response_missing_instruction_returns_the_accepted_delivery_identity()
     {
         using var fixture = new Fixture(mode: "WorkflowResponse");
-        var recipient = Assert.Single(fixture.Receipt.Item.SubscriptionDelivery!.Recipients);
-        var now = DateTimeOffset.UtcNow;
-        await fixture.Executions.SaveAsync(new(recipient.StartIdentity.WorkflowExecutionId, recipient.Material,
-            WorkflowExecutionStatus.Completed, null, now, now, now, now, null, null, fixture.Reservation.Scope.TenantId,
-            new Dictionary<string, string>()));
+        fixture.RetainedResponse = new(RuntimeStandaloneHttpResponseState.Missing);
         await fixture.InvokeAsync();
         Assert.Equal(502, fixture.Http.Response.StatusCode);
         Assert.Equal("ResponseMissing", fixture.Response().GetProperty("code").GetString());
@@ -218,29 +207,6 @@ public sealed class StandaloneHttpTriggerTests
             new(row.Id, "key", StandaloneHttpTriggerSource.Descriptor.PayloadSchema, JsonSerializer.SerializeToElement(new { }))));
     }
 
-    [Fact]
-    public async Task Anonymous_standalone_route_cannot_resume_a_protected_legacy_wait_or_read_the_request_body()
-    {
-        using var fixture = new Fixture();
-        var now = DateTimeOffset.UtcNow;
-        var owner = new WorkflowExecutionState("protected-owner", new("artifact", "definition", "version", "1", "hash"),
-            WorkflowExecutionStatus.Running, null, now, now, now, null, null, null, fixture.Reservation.Scope.TenantId,
-            new Dictionary<string, string>()) { Partition = new(fixture.Reservation.Scope.Persistence.Value), RunKind = WorkflowRunKind.PublishedRun };
-        await fixture.Executions.SaveAsync(owner);
-        await fixture.Activities.SaveAsync(new(new("wait-activity", owner.WorkflowExecutionId, "node", "authored", "test", "1"),
-            ActivityExecutionStatus.Suspended, null, 1, now, now, null, null, null, null, null, ActivitySchedulingProvenance.Empty,
-            null, ["protected-wait"], [], 0, 0, new Dictionary<string, string>()));
-        await fixture.Bookmarks.SaveAsync(new("protected-wait", owner.WorkflowExecutionId, "wait-activity", "node", "resume",
-            HttpEndpointStimulus.StimulusType, fixture.Reservation.StimulusHash, null,
-            new HttpEndpointStimulusOptions(Authorize: true, Policy: "ProtectedWaitPolicy").ToMetadata(), now, null));
-        fixture.Http.Request.Body = new UnreadableBody();
-        await fixture.InvokeAsync();
-        Assert.Equal(401, fixture.Http.Response.StatusCode);
-        Assert.Equal(0, fixture.Port.Calls);
-        Assert.Empty(fixture.Observer.Items);
-        Assert.NotNull(await fixture.Bookmarks.FindAsync(owner.WorkflowExecutionId, "protected-wait"));
-    }
-
     private sealed class Fixture : IDisposable
     {
         private static readonly DateTimeOffset Now = new(2026, 11, 6, 10, 0, 0, TimeSpan.Zero);
@@ -250,9 +216,7 @@ public sealed class StandaloneHttpTriggerTests
         internal readonly Observer Observer = new();
         internal readonly RuntimeIngressReservation Reservation;
         internal readonly RuntimeIngressAdmissionReceipt Receipt;
-        internal readonly InMemoryActivityExecutionStateStore Activities = new();
-        internal readonly InMemoryBookmarkStateStore Bookmarks = new();
-        internal readonly InMemoryWorkflowExecutionStateStore Executions = new();
+        internal RuntimeStandaloneHttpResponse RetainedResponse { get; set; } = new(RuntimeStandaloneHttpResponseState.Pending);
         internal readonly string CapturedMode;
         internal readonly HttpTriggerSourceContext SourceContext;
         private readonly ServiceProvider services;
@@ -284,10 +248,9 @@ public sealed class StandaloneHttpTriggerTests
             Receipt = new(RuntimePostCommitOutboxItem.CreateStandaloneIngress(source, selection, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1))), false);
             Port = new(Receipt);
             var collection = new ServiceCollection().AddLogging().AddPersistenceCore(scope.Persistence.Value);
-            new Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature().ConfigureServices(collection);
-            collection.AddSingleton<IActivityExecutionStateStore>(Activities);
-            collection.AddSingleton<IWorkflowExecutionStateStore>(Executions);
-            collection.AddScoped<HttpResponseInstructionDelivery>();
+            new Elsa.Workflows.Runtime.Http.WorkflowsRuntimeStandaloneHttpFeature().ConfigureServices(collection);
+            collection.AddScoped<IRuntimeStandaloneHttpResponseReader>(provider => new RetainedReader(
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(), scope, Receipt.Item.OutboxItemId, () => RetainedResponse));
             services = collection.BuildServiceProvider();
             Http.RequestServices = services;
             Http.Request.Method = "POST"; Http.Request.Path = "/workflows/http/orders";
@@ -300,28 +263,24 @@ public sealed class StandaloneHttpTriggerTests
             middleware = new(new FakeRouteTable("orders"), new TestRouteMatcher(), accessor,
                 Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions { MaxRequestBodyBytes = maxBytes, SyncRequestTimeout = timeout ?? TimeSpan.FromSeconds(3) }),
                 SourceContext, NullLogger<StandaloneHttpTriggerMiddleware>.Instance, Reader, Port, Observer,
-                bodyParser: new HttpRequestBodyParser(), scopes: services.GetRequiredService<IPersistenceOperationScopeFactory>(),
-                waitIndex: Bookmarks, bookmarks: Bookmarks, executions: Executions, activities: Activities, deliveryStore: Port);
+                bodyParser: new HttpRequestBodyParser(), scopes: services.GetRequiredService<IPersistenceOperationScopeFactory>(), deliveryStore: Port);
         }
         internal Task InvokeAsync() => middleware.InvokeAsync(Http, _ => throw new InvalidOperationException("The reserved source must own the request."));
         internal JsonElement Response() => JsonDocument.Parse(((MemoryStream)Http.Response.Body).ToArray()).RootElement.Clone();
         public void Dispose() => services.Dispose();
     }
-    private sealed class UnreadableBody : Stream
+    private sealed class RetainedReader(IPersistenceAccessContextAccessor access, TriggerScope expected, string sourceId,
+        Func<RuntimeStandaloneHttpResponse> read) : IRuntimeStandaloneHttpResponseReader
     {
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-        public override int Read(byte[] buffer, int offset, int count) => throw new InvalidOperationException("Authorization must run before body reads.");
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
-            ValueTask.FromException<int>(new InvalidOperationException("Authorization must run before body reads."));
-        public override void Flush() => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public ValueTask<RuntimeStandaloneHttpResponse> ReadAsync(TriggerScope scope, string sourceOutboxItemId, CancellationToken cancellationToken)
+        {
+            Assert.Equal(expected, scope);
+            Assert.Equal(scope.Persistence, access.Current.RequireScope());
+            Assert.Equal(sourceId, sourceOutboxItemId);
+            return ValueTask.FromResult(read());
+        }
     }
+
     private sealed class Access(PersistenceScope scope) : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(scope); }
     private sealed class Reader(IReadOnlyList<RuntimeIngressReservation> rows) : IRuntimeIngressReservationReader
@@ -338,6 +297,7 @@ public sealed class StandaloneHttpTriggerTests
         internal int Calls; internal StandaloneTriggerSignal? Signal; internal StandaloneTriggerAdmissionRefusedException? Refusal; internal bool Replayed;
         internal Func<ValueTask<StandaloneTriggerInvocationContext>>? ReadContext;
         internal StandaloneTriggerInvocationContext? Invocation;
+        public bool RequiresEmptyHttpWaitCohort => true;
         public async ValueTask<StandaloneTriggerIngressResult> AdmitAsync(StandaloneTriggerSignal signal, CancellationToken cancellationToken = default)
         {
             Calls++; Signal = signal;

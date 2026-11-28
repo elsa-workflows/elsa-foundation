@@ -170,8 +170,101 @@ for the producer, importer, and fixture.
 )
 ```
 
+Use the same pinned source to replay the classic authored middleware, synchronous replies, HTTP TestRun,
+and the classic checkpoint, command-budget and route convergence cases from that HTTP host.
+
+```sh
+(
+  cd "$compatibility_root/classic-artifact-http"
+  dotnet test extensions/Http/tests/Activities/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj \
+    -c Release -p:RestoreLockedMode=true
+  dotnet test extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~HttpEndpointMiddlewareTests|FullyQualifiedName~ActivitiesHttpFeatureTests'
+  dotnet test extensions/Http/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~WorkflowsRuntimeHttpShellCompositionTests|FullyQualifiedName~WorkflowsRuntimeHttpFeatureTests'
+)
+```
+
 Current source retains the Publishing executable export and material checks, the Design
-JSON workflow reconciliation path, and the Actor HTTP provider witnesses.
+JSON workflow reconciliation path, and the [Actor HTTP provider witnesses](../../essentials/tests/Workflows/Runtime/KernelHost/Tests).
+
+## Classic Dispatch and called-workflow control
+
+Use the pinned source for the classic child start, parent wait and resume, child
+control delivery, and local/EF checkpoint witnesses. Current Native child
+execution uses the same authored publication pin and Actor-owned child execution.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-dispatch" ef70e5acd7fa8b07cfad4a6c0ca9a229a039f20a
+  cd "$compatibility_root/classic-dispatch"
+  dotnet test essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true
+  dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true --filter 'FullyQualifiedName~DispatchWorkflowTests|FullyQualifiedName~BpmnCalledWorkflowControlEfTests'
+  dotnet test extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release -p:RestoreLockedMode=true \
+    --filter FullyQualifiedName~Actual_later_control_producer_can_replace
+)
+```
+
+For the classic REST fire-and-forget, input by correlation ID, and waited outcome cases, use the
+`workbench-classic-default` checkout pinned above at
+`18a16dee878106ac525aa9a861d851a200e43c55`. Run against a separately hosted
+matching Workbench with `ActivitiesDispatchWorkflowRuntime` and
+`ActivitiesDispatchWorkflowDesign` enabled.
+
+```sh
+(
+  cd "$compatibility_root/workbench-classic-default"
+  pwsh -NoProfile -File e2e-tests/Test-ChildWorkflow.ps1 -BaseUrl "$classic_base_url"
+  pwsh -NoProfile -File e2e-tests/composition/Test-ChildWorkflowInput.ps1 -BaseUrl "$classic_base_url"
+  pwsh -NoProfile -File e2e-tests/composition/Test-DispatchWorkflowOutcomes.ps1 -BaseUrl "$classic_base_url"
+)
+```
+
+See the [Actor child execution witness](../../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellChildExecutableTests.cs)
+for current source.
+
+## Classic HTTP activity execution
+
+The classic HTTP activity tests exercise the original activate, checkpoint and
+resume paths, including legacy bookmark responses and materialized inputs. Replay
+those cases against the exact original dependencies.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-http-activities" 148a17e03fac7b457da011eb91d8901d81494892
+  cd "$compatibility_root/classic-http-activities"
+  dotnet test extensions/Http/tests/Activities/Tests/Elsa.Activities.Http.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true \
+    --filter 'FullyQualifiedName~HttpEndpointExecutionTests|FullyQualifiedName~SendHttpRequest|FullyQualifiedName~StandaloneHttpTriggerTests|FullyQualifiedName~WriteHttpResponse'
+)
+```
+
+Current source keeps the transport, authoring and activity cases. The
+[Actor HTTP wait cases](../../essentials/tests/ActorFoundation/Native/Run/HttpSurfaceChecks.cs)
+cover run delivery and resume through Actor Foundation.
+
+## Classic workflow secret activation
+
+The classic CLR runner's secret-rebinding, checkpoint and persistence canaries
+use the original activity activator and workflow stores. Use one checkout for
+the fixture, host, and providers.
+
+```sh
+(
+  git -c core.fsmonitor=false worktree add --detach "$compatibility_root/classic-workflow-secrets" 148a17e03fac7b457da011eb91d8901d81494892
+  cd "$compatibility_root/classic-workflow-secrets"
+  dotnet test extensions/Secrets/tests/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj \
+    -c Release -p:RestoreLockedMode=true
+)
+```
+
+Current source tests secret resolver registration and failure classification,
+the publishing compiler's secret-reference contract, and storage separately.
+The [Actor HTTP connection witness](../../essentials/tests/Workflows/Runtime/KernelHost/Tests/KernelShellHttpConnectionTests.cs)
+uses the retained connection pipeline and checks that credentials are masked
+before the response becomes retained workflow data.
 
 ## Classic reviews, Decisions, ETL and Rules in workflows
 

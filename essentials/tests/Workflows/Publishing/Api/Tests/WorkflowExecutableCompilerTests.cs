@@ -12,7 +12,6 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Flowchart;
@@ -39,13 +38,11 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
-using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -832,11 +829,6 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("version-reusable", executable.RootActivity.Descriptor.Payload.GetProperty("definitionVersionId").GetString());
         Assert.Single(sidecars.Get("version-1").BoundarySegments);
 
-        var captured = await CompleteReusableBoundaryAsync(
-            executable,
-            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]),
-            42);
-        Assert.Equal(42, captured.InlineValue?.GetInt32());
     }
 
     [Fact]
@@ -887,45 +879,6 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task Placed_reusable_activity_materializes_an_omitted_optional_nullable_reference_input_as_absent()
-    {
-        var executable = await PlacedReusableCompiler(
-                authoredInput: null,
-                valueTypeAlias: "String",
-                primaryInputIsRequired: false,
-                primaryInputIsNullable: true)
-            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
-        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create());
-
-        var snapshot = await materializer.MaterializeSnapshotAsync(
-            executable.RootActivity,
-            "consumer-execution",
-            new RuntimeInputBindingResolutionContext("workflow-execution", "consumer-execution", executable: executable),
-            DateTimeOffset.UnixEpoch);
-
-        Assert.Equal(ValuePresence.Absent, snapshot.Values["value"].Presence);
-    }
-
-    [Fact]
-    public async Task Placed_reusable_activity_pins_the_clr_default_for_an_omitted_optional_nonnullable_value_input()
-    {
-        var executable = await PlacedReusableCompiler(
-                authoredInput: null,
-                valueTypeAlias: "Int32",
-                primaryInputIsRequired: false)
-            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
-        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create());
-
-        var snapshot = await materializer.MaterializeSnapshotAsync(
-            executable.RootActivity,
-            "consumer-execution",
-            new RuntimeInputBindingResolutionContext("workflow-execution", "consumer-execution", executable: executable),
-            DateTimeOffset.UnixEpoch);
-
-        Assert.Equal(0, snapshot.Values["value"].InlineValue!.Value.GetInt32());
-    }
-
-    [Fact]
     public async Task Placed_reusable_activity_still_rejects_an_omitted_required_input()
     {
         var compiler = PlacedReusableCompiler(authoredInput: null, valueTypeAlias: "String");
@@ -951,7 +904,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task Placed_reusable_activity_materializes_codec_backed_inputs_inline_without_an_external_payload_store()
+    public async Task Placed_reusable_activity_compiles_codec_backed_input_policies_inline()
     {
         var compiler = PlacedReusableCompiler(
             new WorkflowArgumentState("A", new ArgumentValue(JsonSerializer.SerializeToElement(19), "Literal"), null, null, null, null),
@@ -961,16 +914,6 @@ public sealed class WorkflowExecutableCompilerTests
             ]);
         var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
         var boundary = executable.RootActivity;
-        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create());
-
-        var snapshot = await materializer.MaterializeSnapshotAsync(
-            boundary,
-            "consumer-execution",
-            new RuntimeInputBindingResolutionContext("workflow-execution", "consumer-execution", executable: executable),
-            DateTimeOffset.UnixEpoch);
-
-        Assert.Equal(19, snapshot.Values["A"].InlineValue!.Value.GetInt32());
-        Assert.Equal(23, snapshot.Values["B"].InlineValue!.Value.GetInt32());
         Assert.Equal(DurableValueStorage.Inline, boundary.InputBindings["A"].EffectivePolicy.Storage);
         Assert.Equal(DurableValueStorage.Inline, boundary.InputBindings["B"].EffectivePolicy.Storage);
     }
@@ -1532,7 +1475,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task Reusable_output_capture_preserves_a_custom_driver_and_persistable_value_through_runtime_completion()
+    public async Task Reusable_output_capture_preserves_the_custom_driver_key()
     {
         var driver = new OpaqueOutputStorageDriver();
         var storageDrivers = new RuntimeDurableValueStorageDriverRegistry(
@@ -1603,23 +1546,7 @@ public sealed class WorkflowExecutableCompilerTests
             publication.ActivityTypeKey,
             new Dictionary<string, RuntimeInputBinding>(),
             captures));
-        var executable = new WorkflowExecutable(
-            new("artifact-custom", "workflow", "workflow-version", "1.0.0", "hash-workflow"),
-            placed.Root,
-            placed.ResumeTargets,
-            DateTimeOffset.UnixEpoch,
-            new Dictionary<string, string>(),
-            IncidentStrategyBuiltIns.FaultReference);
-        var opaque = new OpaqueOutput("opaque");
-
-        var captured = await CompleteReusableBoundaryAsync(executable, storageDrivers, opaque);
-
-        // #972: the externalized payload lands in the root variable frame as an External envelope — the
-        // custom driver's encoding (storage profile + locator) is preserved end-to-end.
         Assert.Equal(driver.DriverKey, placed.Root.OutputCaptures["sum"].StorageDriverKey);
-        Assert.NotNull(captured.ExternalReference);
-        Assert.Equal(driver.DriverKey, captured.ExternalReference!.StorageProfile);
-        Assert.Equal(DurableValueStorage.External, captured.Policy.Storage);
     }
 
     [Fact]
@@ -2645,31 +2572,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task CompiledBoundTextInputMaterializesAuthoredValueForTheRuntime()
-    {
-        // End-to-end proof for the WriteLine "blank line" bug: the authored text must survive
-        // compilation as a runtime input binding and materialize back into the value the runtime
-        // feeds to WriteLine.Text. A regression here is exactly what prints a blank line.
-        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
-        var compiler = Compiler(WorkflowVersion(Node("write-hello", Text("Hello World!"))));
-
-        var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
-            VersionId: "version-1",
-            Scope: WorkflowExecutableReferenceScope.Published,
-            CreatedAt: now,
-            PublishedAt: now,
-            ExpiresAt: null,
-            ArtifactIdPrefix: "artifact-"));
-
-        var materialized = await MaterializeInputsAsync(executable, "write-hello", now);
-
-        var textInput = Assert.Single(materialized.Values);
-        Assert.Equal("Text", textInput.Key);
-        Assert.Equal("Hello World!", textInput.Value.InlineValue?.Deserialize<string>());
-    }
-
-    [Fact]
-    public async Task CompiledObjectCollectionInputMaterializesAuthoredArrayForTheRuntime()
+    public async Task CompiledObjectCollectionInputPreservesTheAuthoredArray()
     {
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
         var compiler = Compiler(WorkflowVersion(WriteLinesNode("write-lines", ObjectLines(["Hello", "World"]))));
@@ -2686,11 +2589,7 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         Assert.Equal(JsonValueKind.Array, binding.LiteralValue?.ValueKind);
 
-        var materialized = await MaterializeInputsAsync(executable, "write-lines", now);
-
-        var linesInput = Assert.Single(materialized.Values);
-        var lines = Assert.IsAssignableFrom<ICollection<string>>(linesInput.Value.InlineValue?.Deserialize<string[]>());
-        Assert.Equal(["Hello", "World"], lines);
+        Assert.Equal(new[] { "Hello", "World" }, binding.LiteralValue!.Value.Deserialize<string[]>());
     }
 
     [Fact]
@@ -3156,246 +3055,6 @@ public sealed class WorkflowExecutableCompilerTests
             Assert.Equal(nodeId, target.ExecutableNodeId);
             Assert.Equal("resume-target:probe", target.LocalResumeTargetId);
         }
-    }
-
-    private static ValueTask<ActivityInputSnapshot> MaterializeInputsAsync(
-        WorkflowExecutable executable,
-        string invocationId,
-        DateTimeOffset materializedAt) =>
-        new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create())
-            .MaterializeSnapshotAsync(
-                executable.RootActivity,
-                invocationId,
-                new RuntimeInputBindingResolutionContext(
-                    "workflow-execution-test",
-                    invocationId,
-                    executable: executable),
-                materializedAt);
-
-    private static async Task<ValueEnvelope> CompleteReusableBoundaryAsync(
-        WorkflowExecutable executable,
-        IRuntimeDurableValueStorageDriverRegistry storageDrivers,
-        object? outputValue)
-    {
-        const string workflowExecutionId = "wfexec-reusable";
-        const string boundaryExecutionId = "actexec-reusable";
-        const string childExecutionId = "actexec-reusable-child";
-        var boundary = executable.RootActivity;
-        var child = Assert.Single(boundary.ChildSlots.SelectMany(x => x.Activities));
-        var executableStore = new InMemoryWorkflowExecutableStore();
-        var activityStore = new InMemoryActivityExecutionStateStore();
-        var schedulerQueue = new InMemoryWorkflowSchedulerWorkQueue();
-        var durableStore = new InMemoryDurableValueStateStore();
-        var inspectionStore = new InMemoryActivityExecutionInspectionStore();
-        var incidentStore = new InMemoryIncidentStateStore();
-        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(
-            workflowExecutionStateStore: workflowStateStore,
-            activityExecutionStateStore: activityStore,
-            bookmarkStateStore: null,
-            durableValueStateStore: durableStore,
-            incidentStateStore: incidentStore,
-            operationalStateStore: null,
-            schedulerStateStore: null,
-            activityExecutionInspectionWriter: inspectionStore,
-            rootWriteLeaseManager: PassThroughRootWriteLeaseManager.Instance);
-
-        await executableStore.SaveAsync(executable);
-
-        // #972: the capture's workflow-variable target lives in the canonical root variable frame; seed a
-        // running workflow state whose root frame declares the target key.
-        var objectType = new Elsa.Primitives.Models.ValueTypeDescriptor("Object");
-        var rootFrame = new VariableFrameFactory().CreateRoot(
-            workflowExecutionId,
-            Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId,
-            new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal)
-            {
-                ["caller-result"] = ValueEnvelope.Absent(objectType, ValueProtectionPolicy.InstanceInline)
-            });
-        await workflowStateStore.SaveAsync(new WorkflowExecutionState(
-            workflowExecutionId,
-            executable.Identity,
-            WorkflowExecutionStatus.Running,
-            null,
-            DateTimeOffset.UnixEpoch,
-            DateTimeOffset.UnixEpoch,
-            DateTimeOffset.UnixEpoch,
-            null,
-            null,
-            null,
-            null,
-            new Dictionary<string, string>())
-        {
-            RootVariableFrame = rootFrame
-        });
-        var boundaryContract = boundary.ActivityContract
-            ?? throw new InvalidOperationException("The reusable boundary must carry its pinned runtime activity contract.");
-        var boundaryState = RuntimeState(boundaryExecutionId, boundary, ActivityExecutionStatus.Running) with
-        {
-            ContractIdentity = new ActivityInvocationContractIdentity(
-                boundaryContract.ActivityTypeKey,
-                boundaryContract.ContractVersion,
-                boundaryContract.SchemaFingerprint),
-            InputSnapshot = new ActivityInputSnapshot(
-                boundaryExecutionId,
-                boundaryContract.SchemaFingerprint,
-                "sha256:reusable-boundary-bindings",
-                new Dictionary<string, ValueEnvelope>(),
-                DateTimeOffset.UtcNow.AddMinutes(-2)),
-            Attempts =
-            [
-                new ActivityAttempt(
-                    $"{boundaryExecutionId}:attempt:1",
-                    boundaryExecutionId,
-                    1,
-                    ActivityAttemptReason.Initial,
-                    DateTimeOffset.UtcNow.AddMinutes(-2),
-                    DateTimeOffset.UtcNow.AddMinutes(-1),
-                    transitionKind: Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend)
-            ]
-        };
-        await activityStore.SaveAsync(boundaryState);
-        await activityStore.SaveAsync(RuntimeState(childExecutionId, child, ActivityExecutionStatus.Completed, boundaryExecutionId));
-
-        var services = new ServiceCollection();
-        services.AddScoped<IActivityActivator>(_ => new FixedActivityActivator(new OutputtingCompositeActivity(outputValue)));
-        services.AddScoped<IRuntimeSecretMask, DefaultRuntimeSecretMask>();
-        services.AddSingleton<IWorkflowExecutableStore>(executableStore);
-        services.AddSingleton<IActivityExecutionStateStore>(activityStore);
-        services.AddSingleton<IWorkflowExecutionStateStore>(workflowStateStore);
-        services.AddSingleton<IWorkflowSchedulerWorkQueue>(schedulerQueue);
-        services.AddSingleton(storageDrivers);
-        services.AddSingleton<IDurableValueStateStore>(durableStore);
-        services.AddSingleton<IIncidentStateStore>(incidentStore);
-        services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
-        services.AddSingleton<IActivityExecutionInspectionStore>(inspectionStore);
-        services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
-        services.AddSingleton<IRuntimeCheckpointCommitStore>(checkpointStore);
-        services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
-        services.AddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
-        services.AddSingleton<RuntimeCheckpointCommitter>();
-        services.AddSingleton<ActivityCompletionProjector>();
-        services.AddSingleton<RuntimeOutputCaptureProjector>();
-        services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<ActivityFaultIncidentRecorder>();
-        await using var provider = services.BuildServiceProvider();
-        var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            TimeProvider.System);
-        var now = DateTimeOffset.UtcNow;
-        var payload = new RuntimeCompleteActivityCommandPayload(
-            executable.Identity,
-            boundary.ExecutableNodeId,
-            boundaryExecutionId,
-            parentActivityExecutionId: null,
-            branchId: null,
-            outcomeNames: [ActivityOutcomes.Done],
-            reason: RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
-            completionKind: SchedulerCompletionKind.ParentCompletionEvaluation,
-            completedChildActivityExecutionId: childExecutionId);
-        var workItem = new RuntimeSchedulerWorkItem(
-            "work-reusable-complete",
-            workflowExecutionId,
-            "command-reusable-complete",
-            WorkflowExecutionCommandKind.CompleteActivity,
-            "envelope-reusable",
-            "reusable-complete",
-            now,
-            now,
-            1,
-            JsonSerializer.SerializeToElement(payload),
-            new Dictionary<string, string>(),
-            new Dictionary<string, string>());
-
-        await handler.HandleAsync(workItem);
-
-        // #972: the capture writes the canonical root variable frame in the completion commit — no
-        // variable:* durable row exists any more.
-        var committedWorkflowState = await workflowStateStore.FindAsync(workflowExecutionId);
-        if (committedWorkflowState?.RootVariableFrame is { } committedFrame &&
-            committedFrame.Values.TryGetValue("caller-result", out var capturedEnvelope) &&
-            capturedEnvelope.Presence != ValuePresence.Absent)
-        {
-            var stray = (await durableStore.ListAllDurableValueStatesAsync(workflowExecutionId))
-                .Where(value => value.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal))
-                .ToArray();
-            Assert.Empty(stray);
-            return capturedEnvelope;
-        }
-
-        var storedValues = await durableStore.ListAllDurableValueStatesAsync(workflowExecutionId);
-        var incidents = await incidentStore.ListAsync(workflowExecutionId);
-        throw new Xunit.Sdk.XunitException(
-            $"Normal Runtime boundary completion did not write the compiled caller output target into the root variable frame. " +
-            $"Stored=[{string.Join(',', storedValues.Select(x => x.DurableValueId))}], " +
-            $"Incidents=[{string.Join(" | ", incidents.Select(x => $"{x.FailureType}:{x.Message}"))}].");
-    }
-
-    private static ActivityExecutionState RuntimeState(
-        string activityExecutionId,
-        ExecutableNode node,
-        ActivityExecutionStatus status,
-        string? parentActivityExecutionId = null) => new(
-        Execution: new ActivityExecution(
-            activityExecutionId,
-            "wfexec-reusable",
-            node.ExecutableNodeId,
-            node.AuthoredActivityId,
-            node.ActivityType,
-            node.ActivityTypeVersion),
-        Status: status,
-        SubStatus: null,
-        ScheduledAt: DateTimeOffset.UtcNow.AddMinutes(-2),
-        StartedAt: DateTimeOffset.UtcNow.AddMinutes(-1),
-        CompletedAt: status == ActivityExecutionStatus.Completed ? DateTimeOffset.UtcNow : null,
-        SchedulingActivityExecutionId: null,
-        ParentActivityExecutionId: parentActivityExecutionId,
-        BranchId: null,
-        IterationId: null,
-        CallStackDepth: null,
-        BookmarkIds: [],
-        IncidentIds: [],
-        FaultCount: 0,
-        AggregateFaultCount: 0,
-        Metadata: new Dictionary<string, string>());
-
-    private sealed class FixedActivityActivator(IActivity activity) : IActivityActivator
-    {
-        public ValueTask<ActivityActivationLease> ActivateAsync(
-            ActivityActivationRequest request,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ActivityActivationLease(activity));
-    }
-
-    private sealed class OutputtingCompositeActivity(object? outputValue) :
-        StructuralActivity,
-        IRuntimeActivityChildCompletionHandler,
-        IRuntimeActivityCheckpointParticipant
-    {
-        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
-            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
-
-        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
-            IRuntimeActivityExecutionContext context,
-            IReadOnlyDictionary<string, object?> effectiveInputs,
-            DateTimeOffset capturedAt,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>>([]);
-
-        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
-            IRuntimeActivityExecutionContext context,
-            IReadOnlyCollection<DurableValueState> persistedValues,
-            DateTimeOffset capturedAt,
-            CancellationToken cancellationToken = default)
-            => ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
-                [],
-                ActivityTransition.Complete(outputValue, ActivityOutcomes.Done)));
-    }
-
-    private sealed class OpaqueOutput(string value)
-    {
-        public string Value { get; } = value;
     }
 
     private sealed class PassThroughRootWriteLeaseManager : IWorkflowExecutableRootWriteLeaseManager

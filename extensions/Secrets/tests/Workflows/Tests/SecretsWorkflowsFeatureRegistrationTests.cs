@@ -9,7 +9,6 @@ using Elsa.Secrets.Extensions;
 using Elsa.Secrets.Features;
 using Elsa.Secrets.Workflows.Extensions;
 using Elsa.Secrets.Workflows.Features;
-using Elsa.Secrets.Workflows.Tests.Support;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -113,7 +112,7 @@ public sealed class SecretsWorkflowsFeatureRegistrationTests
             .AddInMemoryCollection(new Dictionary<string, string?> { [$"CShells:Shells:{ShellName}:Features:{feature}"] = null })
             .Build();
         _services.AddLogging();
-        _services.AddSingleton<IDistributedLockProvider, SecretsCanaryWorkflowHost.ProcessLockProvider>();
+        _services.AddSingleton<IDistributedLockProvider, TestLockProvider>();
         _services.AddSingleton<IConfiguration>(configuration);
         _services.AddCShells(shells => shells
             .WithAssemblies(
@@ -126,6 +125,20 @@ public sealed class SecretsWorkflowsFeatureRegistrationTests
                 typeof(SecretsWorkflowsFeatureRegistrationTests).Assembly)
             .WithConfigurationProvider(configuration));
         return _services.BuildServiceProvider(validateScopes: true);
+    }
+
+    private sealed class TestLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 
     /// <summary>Registers <see cref="OtherSecretResolver"/> after the bridge, which it depends on.</summary>
