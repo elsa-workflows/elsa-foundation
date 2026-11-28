@@ -4,7 +4,7 @@ namespace Kernel.EntityFramework;
 
 internal static partial class RootEventStarts
 {
-    private const int PublicAuthorityMarkerId = 4;
+    internal const int PublicAuthorityMarkerId = 4;
     private const int PublicAuthorityTables = 6;
     private sealed record PublicInstallState(int Relations, bool RootSchema, bool HasMarker, bool ExactMarker);
 

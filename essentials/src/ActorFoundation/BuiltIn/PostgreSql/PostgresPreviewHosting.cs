@@ -40,6 +40,41 @@ public static partial class PostgresPreviewHosting
             new(actorType, protectsStarts) { AuthoredStandaloneTenant = publisherScope?.Tenant });
     }
 
+    /// <summary>Advances a stopped PostgreSQL store to the current shipped format.</summary>
+    public static async Task<bool> UpgradeShippedFormatAsync(DbContextOptions<KernelDb> options, string actorType, bool protectsStarts,
+        Contract.BoundScope? publisherScope, CancellationToken cancellationToken)
+    {
+        if (publisherScope is { IsHostIsolated: true })
+            throw new ArgumentException("An isolated scope cannot publish standalone Events.", nameof(publisherScope));
+        RootPublicEventHost.RequireConfiguredActorType(actorType);
+        var host = new RootPublicEventHost(actorType, protectsStarts) { AuthoredStandaloneTenant = publisherScope?.Tenant };
+        var previous = new EfStore(() => KernelDb.ForPostgresRootShippedBeforeUserTasks(options, host), postgres: true);
+        var changed = await previous.UpgradeShippedRootFormatAsync(cancellationToken);
+
+        // An established shard count belongs to the store. Verify the current physical source instead of
+        // asking initial installation to create its default number of partitions.
+        await using var current = CreateShippedContext(options, actorType, protectsStarts, publisherScope);
+        await using var transaction = await current.Database.BeginTransactionAsync(cancellationToken);
+        await EfStore.LockCompatibleStoreFormatAsync(current, cancellationToken, exclusive: true);
+        await PostgresRootAdmission.VerifyEstablishedShippedSourceAsync(current, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return changed;
+    }
+
+    /// <summary>Reads the committed checkpoint of an exact ordinary Actor life for task reconciliation.</summary>
+    public static async ValueTask<Contract.CommittedActorCheckpoint?> ReadUserTaskCheckpointAsync(Func<KernelDb> open, Contract.BoundScope scope,
+        Contract.ActorRef actor, CancellationToken cancellationToken)
+    {
+        if (scope.IsHostIsolated) return null;
+        await using var db = open();
+        if (db.RequiredFormat != StoreFormat.RootShipped)
+            throw new InvalidOperationException("This store does not support Actor user task waits.");
+        var store = new EfStore(open, postgres: true);
+        return await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken) is { } checkpoint
+            ? new(checkpoint.State, (Contract.ActorStatus)checkpoint.Status, checkpoint.ParkAt is not null)
+            : null;
+    }
+
     /// <summary>Selects the dedicated preview format for qualifying indexed playback.</summary>
     public static KernelDb CreatePlaybackQualificationContext(DbContextOptions<KernelDb> options) =>
         KernelDb.ForPostgresRootPlaybackQualification(options);

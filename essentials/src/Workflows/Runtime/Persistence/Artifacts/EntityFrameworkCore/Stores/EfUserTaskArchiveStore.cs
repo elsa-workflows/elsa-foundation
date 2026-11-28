@@ -15,14 +15,16 @@ internal class EfUserTaskArchiveStore(RuntimeDbContext context, IPersistenceAcce
     internal PersistenceAccessContext AccessContext => access.Current;
     public bool IsDurable => true;
     protected string Scope => RequireScope(access);
+    protected virtual bool ReadsActorTasks => false;
 
     public async ValueTask<UserTaskRecord?> FindAsync(string tenantId, string id, CancellationToken cancellationToken = default)
     {
         var scope = Scope;
-        var key = CompositeId(scope, tenantId, id);
+        var actorJournal = ReadsActorTasks && IsActorTaskId(id);
+        var key = TaskRowId(scope, tenantId, id, actorJournal);
         var row = await context.UserTasks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == key, cancellationToken);
         if (row is null) return null;
-        var result = Read(row, scope);
+        var result = Read(row, scope, actorJournal);
         if (result.TenantId != tenantId || result.Id != id) throw new InvalidDataException("The task identity differs from its journal key.");
         return result;
     }
@@ -34,7 +36,12 @@ internal class EfUserTaskArchiveStore(RuntimeDbContext context, IPersistenceAcce
     {
         ValidateLimit(query.Limit);
         var scope = Scope; var sh = Hash(scope); var sk = Encode(scope); var tenant = Encode(query.TenantId); var tenantHash = Hash(query.TenantId);
-        var source = context.UserTasks.AsNoTracking().Where(x => x.ScopeHash == sh && x.ScopeKey == sk && x.TenantHash == tenantHash && x.TenantKey == tenant && x.Status != (int)UserTaskStatus.Staged);
+        var actorKey = ActorScopeKey(scope);
+        var actorHash = Hash(actorKey);
+        var readsActorTasks = ReadsActorTasks;
+        var source = context.UserTasks.AsNoTracking().Where(x => ((x.ScopeHash == sh && x.ScopeKey == sk) ||
+            (readsActorTasks && x.ScopeHash == actorHash && x.ScopeKey == actorKey)) &&
+            x.TenantHash == tenantHash && x.TenantKey == tenant && x.Status != (int)UserTaskStatus.Staged);
         var user = query.UserId is null ? null : Encode(query.UserId);
         var userHash = query.UserId is null ? null : Hash(query.UserId);
         var groupHashes = query.GroupIds.Select(Hash).ToArray();
@@ -56,7 +63,8 @@ internal class EfUserTaskArchiveStore(RuntimeDbContext context, IPersistenceAcce
         }
         if (query.After is { } after) source = source.Where(x => string.Compare(x.TaskId, after) > 0);
         var rows = await source.OrderBy(x => x.TaskId).Take(query.Limit + 1).ToArrayAsync(cancellationToken);
-        return new(rows.Take(query.Limit).Select(x => Read(x, scope)).ToArray(), rows.Length > query.Limit ? rows[query.Limit - 1].TaskId : null);
+        return new(rows.Take(query.Limit).Select(x => Read(x, scope, readsActorTasks && x.ScopeKey == actorKey)).ToArray(),
+            rows.Length > query.Limit ? rows[query.Limit - 1].TaskId : null);
     }
 
     public async ValueTask<UserTaskPage> RecoverAsync(int limit, string? after, CancellationToken cancellationToken = default)
@@ -266,18 +274,35 @@ internal class EfUserTaskArchiveStore(RuntimeDbContext context, IPersistenceAcce
         };
     }
 
-    protected static UserTaskEntity ToRow(UserTaskRecord task, string scope) => new()
+    // A colon cannot appear in a legacy Base64 scope key. The extra framed key component also separates primary keys.
+    protected static string ActorScopeKey(string scope) => ":" + Encode(scope);
+    protected static bool IsActorTaskId(string id) =>
+        id.Length == 64 && id[0] == 't' && id.AsSpan(1).IndexOfAnyExcept("0123456789abcdef") < 0;
+    protected static string TaskRowId(string scope, string tenant, string task, bool actorJournal) =>
+        actorJournal ? CompositeId(scope, tenant, task, "actor-user-task") : CompositeId(scope, tenant, task);
+
+    // Completed task rows still awaiting acknowledgement remain in the work index until the Actor receipt is cleared.
+    protected const int CompletionAwaitingAcknowledgement = (int)UserTaskStatus.Cancelled + 1;
+
+    protected static UserTaskEntity ToRow(UserTaskRecord task, string scope, bool actorJournal = false) => new()
     {
-        Id = CompositeId(scope, task.TenantId, task.Id), ScopeKey = Encode(scope), ScopeHash = Hash(scope), TenantKey = Encode(task.TenantId), TenantHash = Hash(task.TenantId),
+        Id = TaskRowId(scope, task.TenantId, task.Id, actorJournal), ScopeKey = actorJournal ? ActorScopeKey(scope) : Encode(scope),
+        ScopeHash = Hash(actorJournal ? ActorScopeKey(scope) : scope), TenantKey = Encode(task.TenantId), TenantHash = Hash(task.TenantId),
         ClaimantHash = task.ClaimantId is null ? null : Hash(task.ClaimantId), TaskId = task.Id, ExecutionHash = Hash(task.WorkflowExecutionId), AssigneeHash = task.AssigneeId is null ? null : Hash(task.AssigneeId), GroupHash = task.GroupId is null ? null : Hash(task.GroupId), ExecutionKey = Encode(task.WorkflowExecutionId), AssigneeKey = task.AssigneeId is null ? null : Encode(task.AssigneeId),
         GroupKey = task.GroupId is null ? null : Encode(task.GroupId), ClaimantKey = task.ClaimantId is null ? null : Encode(task.ClaimantId),
-        SearchTitle = task.Title.ToUpperInvariant(), Status = (int)task.Status, Revision = task.Revision, ContentJson = JsonSerializer.Serialize(task)
+        SearchTitle = task.Title.ToUpperInvariant(), Revision = task.Revision, ContentJson = JsonSerializer.Serialize(task),
+        Status = actorJournal && task.Status == UserTaskStatus.Completed && !task.ActorAcknowledged
+            ? CompletionAwaitingAcknowledgement : (int)task.Status
     };
-    private static UserTaskRecord Read(UserTaskEntity row, string scope)
+    protected static UserTaskRecord Read(UserTaskEntity row, string scope, bool actorJournal = false)
     {
         var content = UserTasksEfModule.Chain.Upcast<UserTaskEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
         var value = JsonSerializer.Deserialize<UserTaskRecord>(content) ?? throw new InvalidDataException("The task journal is invalid.");
-        var expected = ToRow(value, scope);
+        if (actorJournal && (!IsActorTaskId(value.Id) || value.ActorRecipient is not { } actor ||
+            actor.ActorId != value.WorkflowExecutionId || actor.FrameId != value.InvocationId ||
+            string.IsNullOrWhiteSpace(actor.WaitId) || value.OperationKey != value.Id || value.Recipient is not null))
+            throw new InvalidDataException("The Actor task journal lacks its canonical wait identity.");
+        var expected = ToRow(value, scope, actorJournal);
         if (row.Id != expected.Id || row.ScopeKey != expected.ScopeKey || row.ScopeHash != expected.ScopeHash ||
             row.TenantKey != expected.TenantKey || row.TenantHash != expected.TenantHash || row.ClaimantHash != expected.ClaimantHash || row.ExecutionHash != expected.ExecutionHash || row.AssigneeHash != expected.AssigneeHash || row.GroupHash != expected.GroupHash || row.TaskId != expected.TaskId || row.ExecutionKey != expected.ExecutionKey ||
             row.AssigneeKey != expected.AssigneeKey || row.GroupKey != expected.GroupKey || row.ClaimantKey != expected.ClaimantKey ||
@@ -309,5 +334,5 @@ internal class EfUserTaskArchiveStore(RuntimeDbContext context, IPersistenceAcce
         if (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null || System.Transactions.Transaction.Current is not null)
             throw new InvalidOperationException("Task journal mutations require a clean independent persistence operation.");
     }
-    private static void ValidateLimit(int limit) { if (limit is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(limit)); }
+    protected static void ValidateLimit(int limit) { if (limit is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(limit)); }
 }

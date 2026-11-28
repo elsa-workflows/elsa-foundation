@@ -240,6 +240,7 @@ public static class NativeExecutableMapper
             var id = source.ExecutableNodeId;
             var type = _types[id];
             if (type == typeof(Native.EvaluateDecision)) RequireDecisionBindings(source, scope);
+            if (type == typeof(Native.CreateUserTask)) RequireUserTaskBindings(source);
             var child = type == typeof(Native.DispatchWorkflow) ? ReadTestRunChild(source) : null;
             if (type == typeof(Native.DispatchWorkflow) && requireTestRunChildren &&
                 (child is null || source.InputBindings.GetValueOrDefault("WaitForCompletion") is not
@@ -280,6 +281,25 @@ public static class NativeExecutableMapper
                 if (!safeSource)
                     throw NativeMappingRefusedException.Binding(id, binding.InputKey,
                         "Use a plain literal or an unprotected workflow input for Evaluate Decision.");
+            }
+        }
+
+        private static void RequireUserTaskBindings(ExecutableNode source)
+        {
+            var id = source.ExecutableNodeId;
+            const string actions = nameof(Native.CreateUserTask.Actions);
+            if (source.InputBindings.GetValueOrDefault(actions) is not
+                { Source: RuntimeInputBindingSource.Literal, LiteralValue: { ValueKind: JsonValueKind.Array } values } ||
+                values.GetArrayLength() == 0 || values.EnumerateArray().Any(value =>
+                    value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(value.GetString())))
+                throw NativeMappingRefusedException.Binding(id, actions, "Set the user task actions to a fixed list of action names.");
+
+            foreach (var binding in source.InputBindings.Values)
+            {
+                if (binding.Source != RuntimeInputBindingSource.Literal || UnsupportedOutputPolicy(binding.EffectivePolicy) ||
+                    binding.Literal is { } literal && UnsupportedOutputPolicy(literal.Policy))
+                    throw NativeMappingRefusedException.Binding(id, binding.InputKey,
+                        "Use a plain literal for a user task field.");
             }
         }
 

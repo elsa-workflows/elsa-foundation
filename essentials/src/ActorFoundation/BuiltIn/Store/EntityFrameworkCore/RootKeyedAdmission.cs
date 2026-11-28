@@ -11,7 +11,7 @@ internal static class RootKeyedAdmission
     internal const string BindingTable = "FoundationKeyBindings";
     internal const string ReceiptTable = "FoundationKeyReceipts";
     internal const string Source = "/*key-source*/";
-    private const int AuthorityMarkerId = 3;
+    internal const int AuthorityMarkerId = 3;
 
     internal sealed record Request(string Tenant, string Key, string Operation, string Kind, string? Payload,
         StartSpec? Start, long? Due, long Window);

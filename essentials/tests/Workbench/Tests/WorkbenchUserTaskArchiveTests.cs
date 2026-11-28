@@ -8,9 +8,15 @@ namespace Elsa.Workbench.Tests;
 public sealed class WorkbenchUserTaskArchiveTests
 {
     [Fact]
-    public async Task Stock_actor_host_reads_its_inbox_and_reopens_published_task_forms()
+    public async Task Earlier_actor_profile_reads_its_inbox_and_reopens_published_task_forms()
     {
-        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development with
+        {
+            Settings = new Dictionary<string, string>(WorkbenchShell.Development.Settings)
+            {
+                ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:ActorUserTaskWaits"] = "false"
+            }
+        });
         using (var anonymous = await host.Client.GetAsync("/runtime/user-task-forms/definitions"))
             Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
 
@@ -56,6 +62,26 @@ public sealed class WorkbenchUserTaskArchiveTests
         using var restartedClient = await SignInAsync(restarted);
         var reopened = await restartedClient.GetFromJsonAsync<JsonNode>("/runtime/user-task-forms/approval/versions/1");
         Assert.Equal("Review note", (string?)reopened?["form"]?["fields"]?[0]?["label"]);
+    }
+
+    [Fact]
+    public async Task Actor_host_without_the_task_composition_omits_its_inbox_and_addable_activity()
+    {
+        await using var host = await WorkbenchProcess.StartAsync(WorkbenchShell.Development with
+        {
+            Settings = new Dictionary<string, string>(WorkbenchShell.Development.Settings)
+            {
+                ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:ActorUserTaskWaits"] = "false",
+                ["CShells:Shells:default:Features:WorkflowsRuntimeKernelUserTasksApi"] = "false"
+            }
+        });
+        using var client = await SignInAsync(host);
+        var capabilities = await client.GetFromJsonAsync<JsonNode>("/capabilities");
+        Assert.DoesNotContain(capabilities!["capabilities"]!.AsArray(), item => (string?)item?["id"] == "elsa.api.user-tasks");
+        var catalog = await client.GetFromJsonAsync<JsonNode>("/design/activities/catalog");
+        var activities = catalog!["activities"]!.AsArray();
+        Assert.Contains(activities, item => (string?)item?["activityTypeKey"] == "Elsa.Activities.Primitives.Activities.WriteLine");
+        Assert.DoesNotContain(activities, item => (string?)item?["activityTypeKey"] == "Elsa.Activities.Primitives.Activities.CreateUserTask");
     }
 
     private static async Task<HttpClient> SignInAsync(WorkbenchProcess host)

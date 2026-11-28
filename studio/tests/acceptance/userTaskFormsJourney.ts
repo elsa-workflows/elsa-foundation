@@ -11,7 +11,7 @@ export async function userTaskFormsJourney(page: Page, info: TestInfo, capture: 
   await operate.getByRole("link", { name: "User tasks", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks(?:\?|$)/);
   await expect(page.getByRole("heading", { name: "No tasks here", exact: true })).toBeVisible();
-  await expect(page.getByText(/Task records are read-only on this backend/)).toBeVisible();
+  await expect(page.getByText(/Task records are read-only on this backend/)).toHaveCount(0);
   await capture(page, info, "task-inbox");
 
   await operate.getByRole("link", { name: "Task forms", exact: true }).click();

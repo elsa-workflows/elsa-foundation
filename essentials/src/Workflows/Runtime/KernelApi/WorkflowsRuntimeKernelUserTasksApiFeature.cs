@@ -25,7 +25,7 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 [ShellFeature(
     name: "WorkflowsRuntimeKernelUserTasksApi",
     DisplayName = "Workflows Runtime User Tasks and Forms API",
-    Description = "Views the task inbox and edits reusable task forms without enabling workflow task actions.",
+    Description = "Views the task inbox, edits reusable task forms, and serves actions on actor-owned tasks when task execution is selected.",
     DependsOn = new object[] { WorkflowsRuntimeKernelRetainedApiFeature.FeatureName, "WorkflowsRuntimeUserTaskArchiveEntityFrameworkCore" })]
 public sealed class WorkflowsRuntimeKernelUserTasksApiFeature : IWebShellFeature, IPostConfigureShellServices
 {
@@ -43,7 +43,8 @@ public sealed class WorkflowsRuntimeKernelUserTasksApiFeature : IWebShellFeature
             provider.GetRequiredService<TimeProvider>(),
             null,
             provider.GetRequiredService<UserTaskCursorCodec>(),
-            provider.GetRequiredService<IPersistenceAccessContextAccessor>()));
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+            actorRuntime: provider.GetService<IActorUserTaskRuntime>()));
         services.AddPermissionContributor<UserTaskArchivePermissions>();
     }
 
@@ -52,13 +53,34 @@ public sealed class WorkflowsRuntimeKernelUserTasksApiFeature : IWebShellFeature
         if (services.Count(descriptor => descriptor.ServiceType == typeof(IUserTaskStore) && !descriptor.IsKeyedService) != 1)
             throw new InvalidOperationException("The user task archive API requires a single task persistence owner.");
 
-        services.AddApiCapability(new ApiCapabilityDeclaration(UserTaskHttpApi.CapabilityId, 1, UserTaskHttpApi.ArchiveLinks, "WorkflowsRuntimeKernelUserTasksApi"));
+        var participantOwners = services.Count(descriptor =>
+            descriptor.ServiceType == typeof(IActorUserTaskRuntime) && !descriptor.IsKeyedService);
+        if (participantOwners > 1)
+            throw new InvalidOperationException("The user task API requires a single actor task execution owner.");
+        var participantActions = participantOwners == 1;
+        if (participantActions)
+            services.AddPermissionContributor<UserTaskParticipantPermissions>();
+
+        ApiCapabilityLink[] links = participantActions
+            ? [.. UserTaskHttpApi.ArchiveLinks, .. UserTaskHttpApi.ParticipantLinks]
+            : UserTaskHttpApi.ArchiveLinks;
+        services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.user-tasks", 1, links, "WorkflowsRuntimeKernelUserTasksApi"));
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
         var api = endpoints.MapEndpointGroup(RuntimeHttpApi.OwnerId, UserTaskJsonContext.Default, jsonContentType: "application/json; charset=utf-8");
-        UserTaskHttpApi.MapEndpoints(api, includeAssignmentTargets: false);
+        var available = endpoints.ServiceProvider.GetRequiredService<IServiceProviderIsService>();
+        var participantActions = available.IsService(typeof(IActorUserTaskRuntime));
+        UserTaskHttpApi.MapEndpoints(api, includeAssignmentTargets: participantActions, includeParticipantActions: participantActions);
+    }
+
+    private sealed class UserTaskParticipantPermissions : IPermissionContributor
+    {
+        public IEnumerable<Permission> Contribute() =>
+        [
+            new(UserTaskPermissions.Act, "Act on my tasks", "User Tasks", "Claim, release and respond to eligible actor-owned user tasks.")
+        ];
     }
 
     private sealed class UserTaskArchivePermissions : IPermissionContributor

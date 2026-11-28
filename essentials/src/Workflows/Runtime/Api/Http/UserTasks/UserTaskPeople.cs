@@ -10,7 +10,8 @@ namespace Elsa.Workflows.Runtime.Api.UserTasks;
 /// Each distinct ID is read once per request; an ID that is not in the task's tenant directory gets no name.
 /// Names are display-only: a directory failure leaves the name out rather than failing a response whose change is already saved.
 /// </summary>
-internal sealed class UserTaskPeople(IUserStore? users = null, IRoleStore? roles = null, ILogger<UserTaskPeople>? logger = null)
+internal sealed class UserTaskPeople(IUserStore? users = null, IRoleStore? roles = null, ILogger<UserTaskPeople>? logger = null,
+    IActorUserTaskRuntime? actorRuntime = null)
 {
     private readonly Dictionary<(string Tenant, string Id), string?> userNames = new();
     private readonly Dictionary<(string Tenant, string Id), string?> groupNames = new();
@@ -28,7 +29,8 @@ internal sealed class UserTaskPeople(IUserStore? users = null, IRoleStore? roles
             task.AssigneeId, await UserAsync(task.TenantId, task.AssigneeId, cancellationToken),
             task.GroupId, await GroupAsync(task.TenantId, task.GroupId, cancellationToken),
             task.ClaimantId, await UserAsync(task.TenantId, task.ClaimantId, cancellationToken),
-            task.Actions, task.OptionalFormActions, task.Form, task.Prefill, task.Status.ToString(), task.Revision, history, task.Decision);
+            task.Actions, task.OptionalFormActions, task.Form, task.Prefill, task.Status.ToString(), task.Revision, history, task.Decision,
+            actorRuntime?.Owns(task));
     }
 
     public async Task<UserTaskView> ViewAsync(ValueTask<UserTaskRecord> task, CancellationToken cancellationToken) => await ViewAsync(await task, cancellationToken);

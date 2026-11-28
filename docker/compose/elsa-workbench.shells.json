@@ -129,6 +129,7 @@
           "WorkflowsRuntimeKernelRetainedApi": {},
           "WorkflowsRuntimeKernelUserTasksApi": {},
           "WorkflowsRuntimeKernelHosting": {
+            "ActorUserTaskWaits": true,
             "Provider": "PostgreSql"
           },
           "WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence": {

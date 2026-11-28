@@ -194,6 +194,7 @@
           "WorkflowsRuntimeKernelRetainedApi": {},
           "WorkflowsRuntimeKernelUserTasksApi": {},
           "WorkflowsRuntimeKernelHosting": {
+            "ActorUserTaskWaits": true,
             "Provider": "SQLite",
             "PreparedStandaloneStarts": true
           },

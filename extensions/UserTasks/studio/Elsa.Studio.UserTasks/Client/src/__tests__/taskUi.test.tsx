@@ -80,6 +80,18 @@ describe("task form rendering and decision delivery", () => {
     expect(postJson).not.toHaveBeenCalled();
   });
 
+  it("preserves read-only access to a historical task on a backend with task actions", async () => {
+    const postJson = vi.fn();
+    const archived = { ...task(), supportsActions: false };
+    await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(archived), postJson)}
+      id="task" identity={{ ...identity, canManage: true }} />));
+
+    await vi.waitFor(() => expect(container.textContent).toContain("This task record is read-only."));
+    expect([...container.querySelectorAll("button")].map(button => button.textContent)).not.toContain("Approve");
+    expect(container.querySelector('[aria-label="Task actions"]')).toBeNull();
+    expect(postJson).not.toHaveBeenCalled();
+  });
+
   it("uses the shared outlined-field control contract for scalar fields", async () => {
     const form = { fields: [
       { key: "name", label: "Name", kind: "text" },
