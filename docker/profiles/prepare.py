@@ -101,7 +101,7 @@ def expand_pack_references(path, packs_directory):
             continue
         reference = PACK_REFERENCE.fullmatch(line)
         if reference is None:
-            raise ValueError(f"{location} must use a pack name like '@engine'")
+            raise ValueError(f"{location} must use a pack name like '@actor-engine'")
         if line in included:
             raise ValueError(f"{location} repeats pack {line}, first included at {included[line]}")
         included[line] = location

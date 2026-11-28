@@ -51,9 +51,6 @@ public sealed class WorkflowsRuntimeKernelRetainedApiFeature : IWebShellFeature,
 
     public void PostConfigureServices(IServiceCollection services)
     {
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(LegacyRuntimeApiSelected) && !descriptor.IsKeyedService))
-            throw new InvalidOperationException($"The shell must select either {FeatureName} or WorkflowsRuntimeApi, which share Workflow Runtime routes.");
-
         ConfigureKernelServices(services);
         services.AddScoped<IWorkflowRetainedRunSource>(serviceProvider => serviceProvider.GetRequiredService<KernelRunReader>());
         var links = RuntimeApiCapabilities.StaticDeclaration.Links.Where(link => link.Rel is

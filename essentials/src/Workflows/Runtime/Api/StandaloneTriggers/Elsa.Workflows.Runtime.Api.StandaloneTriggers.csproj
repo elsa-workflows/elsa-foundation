@@ -3,7 +3,6 @@
     <Description>Standalone trigger management and capability endpoints shared by workflow engines.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Api" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
