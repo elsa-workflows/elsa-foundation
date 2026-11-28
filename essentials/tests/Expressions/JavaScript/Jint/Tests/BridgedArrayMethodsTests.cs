@@ -12,8 +12,8 @@ using Xunit;
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 /// <summary>
-/// An array the value bridge enters (spec 1228) behaves like a plain JavaScript array under every array method that
-/// returns a new array (#6221: <c>slice</c> with a start above 0 returned null elements).
+/// An array the value bridge enters (spec 1228) behaves like a plain JavaScript array, under the array methods that
+/// return a new array and those that change it in place (#6221: <c>slice</c> with a start above 0 returned null elements).
 /// </summary>
 public sealed class BridgedArrayMethodsTests
 {
