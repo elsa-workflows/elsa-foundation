@@ -7553,219 +7553,6 @@
       ]
     },
     {
-      "path": "essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj",
-      "name": "Elsa.Workflows.Runtime.Distributed",
-      "kind": "source",
-      "domain": "Elsa.Workflows",
-      "sub_domain": "Runtime.Distributed",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Workflows.Runtime.Distributed",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Cluster.Core",
-          "path": "essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Cluster.InProcess",
-          "path": "essentials/src/Cluster/InProcess/Elsa.Cluster.InProcess.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks.Core",
-          "path": "essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks.Schedules",
-          "path": "essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Core",
-          "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime",
-          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Cronos",
-          "version": "0.13.0"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
-      "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj",
-      "name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-      "kind": "source",
-      "domain": "Elsa.Workflows",
-      "sub_domain": "Runtime.Distributed.Persistence.EntityFrameworkCore",
-      "role": "feature/implementation",
-      "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-      "line": "B",
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Persistence.EntityFramework",
-          "path": "essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells.Abstractions",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Elsa.Specifications.PackageManifest.Generator",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Relational",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "CShells",
-          "version": "0.0.31"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Cronos",
-          "version": "0.13.0"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Caching.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Caching.Memory",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Json",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Hosting.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.12"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.12"
-        }
-      ]
-    },
-    {
       "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
       "name": "Elsa.Workflows.Runtime",
       "kind": "source",
@@ -11707,11 +11494,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Graph",
           "path": "essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj"
         },
@@ -12588,11 +12370,6 @@
           "type": "internal",
           "id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -13498,21 +13275,6 @@
           "type": "internal",
           "id": "Elsa.Cluster.Core",
           "path": "essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Serialization.SystemText",
-          "path": "essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Serialization.Testing",
-          "path": "essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "external",
@@ -15173,11 +14935,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
         },
@@ -15374,11 +15131,6 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Api",
           "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -16283,70 +16035,6 @@
       ]
     },
     {
-      "path": "essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj",
-      "name": "Elsa.Workbench.BackgroundActivities.Tests",
-      "kind": "test",
-      "domain": "Elsa.Workbench",
-      "sub_domain": "-",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Cluster.Core",
-          "path": "essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Core",
-          "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workbench.Tests.BackgroundActivities",
-          "path": "essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
       "path": "essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj",
       "name": "BackgroundActivities",
       "kind": "test",
@@ -16370,43 +16058,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Cluster.Core",
-          "path": "essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Cluster.EntityFrameworkCore",
-          "path": "essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "external",
           "id": "CShells.Abstractions",
           "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Hosting.Abstractions",
-          "version": "10.0.10"
         }
       ]
     },
@@ -18294,228 +17952,6 @@
       ]
     },
     {
-      "path": "essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj",
-      "name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests",
-      "kind": "test",
-      "domain": "Elsa.Workflows",
-      "sub_domain": "Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests",
-      "role": "test",
-      "declared_target_framework": "net10.0",
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.SqlServer",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "MySql.EntityFrameworkCore",
-          "version": "10.0.9"
-        },
-        {
-          "type": "external",
-          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
-          "version": "10.0.0"
-        },
-        {
-          "type": "external",
-          "id": "Testcontainers.MsSql",
-          "version": "4.15.0"
-        },
-        {
-          "type": "external",
-          "id": "Testcontainers.MySql",
-          "version": "4.15.0"
-        },
-        {
-          "type": "external",
-          "id": "Testcontainers.PostgreSql",
-          "version": "4.15.0"
-        },
-        {
-          "type": "external",
-          "id": "Xunit.SkippableFact",
-          "version": "1.5.23"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj",
-      "name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests",
-      "kind": "test",
-      "domain": "Elsa.Workflows",
-      "sub_domain": "Runtime.Distributed.Persistence.EntityFrameworkCore.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
-      "path": "essentials/tests/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj",
-      "name": "Elsa.Workflows.Runtime.Distributed.Tests",
-      "kind": "test",
-      "domain": "Elsa.Workflows",
-      "sub_domain": "Runtime.Distributed.Tests",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.ControlFlow",
-          "path": "essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.DispatchWorkflow.Runtime",
-          "path": "essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Cluster.Readability",
-          "path": "essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Api",
-          "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Core",
-          "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Activities.Testing",
-          "path": "essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Cluster.Testing",
-          "path": "essentials/tests/Cluster/Testing/Elsa.Cluster.Testing.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Serialization.Testing",
-          "path": "essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Tasks",
-          "path": "extensions/Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj"
-        },
-        {
-          "type": "external",
-          "id": "CShells",
-          "version": "0.0.31"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.TimeProvider.Testing",
-          "version": "10.8.0"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.NET.Test.Sdk",
-          "version": "18.0.0"
-        },
-        {
-          "type": "external",
-          "id": "coverlet.collector",
-          "version": "6.0.2"
-        },
-        {
-          "type": "external",
-          "id": "xunit",
-          "version": "2.9.3"
-        },
-        {
-          "type": "external",
-          "id": "xunit.runner.visualstudio",
-          "version": "3.1.5"
-        }
-      ]
-    },
-    {
       "path": "essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj",
       "name": "IndependentTriggers.Consumer",
       "kind": "test",
@@ -18647,6 +18083,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Connections.Workflows",
+          "path": "extensions/Connections/src/Workflows/Elsa.Connections.Workflows.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Http",
           "path": "extensions/Http/src/Activities/Elsa.Activities.Http.csproj"
         },
@@ -18659,6 +18100,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Http",
           "path": "extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets",
+          "path": "extensions/Secrets/src/Elsa.Secrets/Elsa.Secrets.csproj"
         },
         {
           "type": "external",
@@ -34302,16 +33748,6 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Api",
           "path": "essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
-          "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
