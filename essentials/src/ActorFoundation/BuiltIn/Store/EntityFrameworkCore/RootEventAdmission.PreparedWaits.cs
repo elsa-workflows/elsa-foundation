@@ -62,10 +62,13 @@ internal static partial class RootEventAdmission
             var key = tenant + "_" + delivery.Key;
             var waits = await ReadWaitsAsync(db, tenant, key, Apply, bind is not null, token);
             if (waits.Count == 0) continue;
-            if (delivery.RequiredWaitSuffix is { } suffix
+            var conflicts = delivery.RequiredWaitSuffix is { } suffix
                 ? waits.Any(wait => wait.Wait?.EndsWith(suffix, StringComparison.Ordinal) != true)
-                : delivery.Payload is null)
-                throw new PreparedWaitAuthorityConflictException();
+                : delivery.Payload is null;
+            // The extra row is the bounded read's overflow marker. A probe must never vouch for
+            // unseen matches, even when every row in its returned page has the expected stamp.
+            var oversizedProbe = delivery.Payload is null && waits.Count > FoundationMetadataLimits.MaxTurnSends;
+            if (conflicts || oversizedProbe) throw new PreparedWaitAuthorityConflictException();
             if (delivery.Payload is not { } content) continue;
             if (waits.Count > FoundationMetadataLimits.MaxTurnSends - messages.Count) throw FanoutFull();
             foreach (var wait in waits)
