@@ -13,16 +13,6 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <ProjectReference Include="../../src/Runtime/Elsa.Rules.Runtime.csproj" />
     <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Locking/Core/Elsa.Locking.Core.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
-    <ProjectReference Include="../../../Tasks/src/Elsa.Tasks/Elsa.Tasks.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Mediator/Elsa.Mediator/Elsa.Mediator.csproj" />
-    <ProjectReference Include="../../../../essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj" />
-    <ProjectReference Include="../../../../essentials/src/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
 </Project>
