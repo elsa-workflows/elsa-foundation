@@ -1,5 +1,7 @@
 using System.Runtime.Loader;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Workflows.Runtime.Api.Services;
 using Microsoft.CodeAnalysis;
 using Xunit;
 
@@ -38,10 +40,10 @@ public sealed class PermissionAuthorizationBoundaryTests
     ];
 
     /// <summary>The HTTP authorization contexts, which must ask the authorization service rather than read grants.</summary>
-    private static readonly (string Assembly, string Type)[] AuthorizationContexts =
+    private static readonly Type[] AuthorizationContexts =
     [
-        ("Elsa.Activities.Design.Api", "Elsa.Activities.Design.Api.Services.HttpContextActivityDesignAuthorizationContext"),
-        ("Elsa.Workflows.Runtime.Api", "Elsa.Workflows.Runtime.Api.Services.HttpContextActivityExecutionInspectionAuthorizationContext")
+        typeof(HttpContextActivityDesignAuthorizationContext),
+        typeof(HttpContextActivityExecutionInspectionAuthorizationContext)
     ];
 
     private static readonly Lazy<PermissionBypassScan> FirstPartyScan =
@@ -73,10 +75,11 @@ public sealed class PermissionAuthorizationBoundaryTests
         Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, scan.ContributedPermissionKeys);
         Assert.Contains(Elsa.Secrets.Core.Permissions.SecretsPermissions.Read, scan.ContributedPermissionKeys);
         Assert.Contains(Elsa.Connections.Core.Permissions.ConnectionsPermissions.Manage, scan.ContributedPermissionKeys);
-        foreach (var (assembly, type) in AuthorizationContexts)
+        foreach (var context in AuthorizationContexts)
         {
-            Assert.True(
-                scan.ClaimLookupsByType.GetValueOrDefault(PermissionBypassScan.TypeKey(assembly, type)) > 0,
+            var type = context.FullName!;
+            var key = PermissionBypassScan.TypeKey(context.Assembly.GetName().Name!, type);
+            Assert.True(scan.ClaimLookupsByType.GetValueOrDefault(key) > 0,
                 $"The scan saw no claim lookup in {type}, so it is not judging that context's claim reads.");
             Assert.DoesNotContain(ReviewedReaders, reader => reader.Type == type);
         }
@@ -169,10 +172,8 @@ public sealed class PermissionAuthorizationBoundaryTests
         var token = ScanFixture("Elsa.Foundation.Identity.Api",
             PermissionClaimProjection("Elsa.Foundation.Identity.Api", "FoundationIdentityApi", "HandleTokenAsync", "HandleSessionAsync"));
         var contexts = AuthorizationContexts
-            .Select(context => ScanFixture(context.Assembly, PermissionClaimProjection(
-                context.Type[..context.Type.LastIndexOf('.')],
-                context.Type[(context.Type.LastIndexOf('.') + 1)..],
-                "Project")))
+            .Select(context => ScanFixture(context.Assembly.GetName().Name!,
+                PermissionClaimProjection(context.Namespace!, context.Name, "Project")))
             .ToArray();
 
         var exempted = Assert.Single(token.Exempted);
