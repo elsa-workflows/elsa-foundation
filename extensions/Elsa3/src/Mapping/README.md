@@ -359,9 +359,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN`. A target declaring two inputs that differ only in letter case is
     `ELS3-LITERAL-KEY-AMBIGUOUS`. A literal `Items`, an expression or blank `DefaultItemInputKey` and an
     expression `Input` are `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`.
-  - `Completed` is dropped silently where `Done` already reaches its target (not a WaitAll join). With a literal-false
-    wait `Completed` is never emitted, and it is dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, as is
-    `Canceled` (never emitted). Any other route, and any
+  - With a literal-false wait `Completed` is never emitted, and it is dropped with
+    `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, as is `Canceled` (never emitted), also where `Done` reaches the same
+    target. Otherwise `Completed` is dropped silently where `Done` already reaches its target (not a WaitAll join). Any other route, and any
     connection Elsa 3 never followed into a WaitAll join, is `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`: connect the follow-up to `Done`. With a literal-false
     wait the branches never ran in Elsa 3 and are dropped with the same warning.
   - A branch reading what Elsa 3 passed it about the child (`ChildInstanceId`, `WorkflowOutput`, `WorkflowInstanceId`,

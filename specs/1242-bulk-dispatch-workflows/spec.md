@@ -395,9 +395,9 @@ and on-completed-callbacks suites pass.
 - **FR-017**: Outcomes:
   - `Done` maps to `Done`.
   - `Completed` (Elsa 3 emitted it with `Done` when it waited and had items):
-    - dropped without a diagnostic when `Done` reaches every one of its targets and none is a `WaitAll` join;
     - dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` when the wait is a literal false, unless it leads to a
-      `WaitAll` join;
+      `WaitAll` join. This rule comes first: Elsa 3 never emitted it, even where `Done` reaches the same target;
+    - otherwise dropped without a diagnostic when `Done` reaches every one of its targets and none is a `WaitAll` join;
     - otherwise refused with `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`. Guidance: connect the follow-up to `Done`.
   - `Canceled` (never emitted): dropped with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`, unless it leads to a `WaitAll`
     join.
