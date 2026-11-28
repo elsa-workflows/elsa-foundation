@@ -167,6 +167,25 @@ public sealed class KernelServing
         }
     }
 
+    internal ServingState PlanPeerPublications(IEnumerable<KernelServedSlot> publications)
+    {
+        // Host-owned workflows have no publication revision and remain installed on this node.
+        var slots = _state.Slots.Values.Where(slot => slot.Revision == 0).Concat(publications);
+        return Build(slots.ToDictionary(slot => slot.SlotId, StringComparer.Ordinal));
+    }
+
+    internal void ApplyPeerPublications(ServingState state)
+    {
+        lock (_lock)
+        {
+            foreach (var slot in state.Slots.Values)
+                if (!_state.Slots.TryGetValue(slot.SlotId, out var previous) || previous.Workflow != slot.Workflow)
+                    Registry.Add(slot.Workflow);
+            // Keep prior artifacts in the registry for actors that have already admitted them.
+            _state = state;
+        }
+    }
+
     private ServingState Build(Dictionary<string, KernelServedSlot> slots)
     {
         var ordered = slots.Values.OrderBy(slot => slot.SlotId, StringComparer.Ordinal).ToArray();

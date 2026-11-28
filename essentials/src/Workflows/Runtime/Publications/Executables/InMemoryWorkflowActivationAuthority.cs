@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
-public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAuthority
+public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAuthority, IWorkflowActivationSnapshot
 {
     private readonly Lock gate = new();
     private readonly Dictionary<string, WorkflowActivationSlot> slots = new(StringComparer.Ordinal);
@@ -51,6 +51,18 @@ public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAut
     {
         cancellationToken.ThrowIfCancellationRequested();
         lock (gate) return ValueTask.FromResult(Commit(PlanActivation(request)));
+    }
+
+    bool IWorkflowActivationSnapshot.SupportsPeerRefresh => true;
+
+    ValueTask<IReadOnlyCollection<WorkflowActivationStamp>> IWorkflowActivationSnapshot.ListActiveAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (gate)
+            return ValueTask.FromResult<IReadOnlyCollection<WorkflowActivationStamp>>(slots.Values
+                .Where(slot => slot.ActiveActivationId is not null)
+                .Select(slot => new WorkflowActivationStamp(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName,
+                    slot.ActiveActivationId!, slot.Revision)).ToArray());
     }
 
     public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(string workflowDefinitionId, string slotName, WorkflowActivationSource source, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default)

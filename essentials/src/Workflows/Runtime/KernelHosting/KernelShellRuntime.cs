@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells.Lifecycle;
@@ -28,6 +29,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
     : IAsyncDisposable
 {
     private static readonly TimeSpan MaintenanceStopBudget = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan PeerPublicationRefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan InlineSettlementBudget = TimeSpan.FromSeconds(5);
 
     private IHostedService? _owner;
@@ -167,6 +169,8 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
             retention.Unavailable, logs.CreateLogger<KernelRetentionWorker>());
         var maintenanceToken = _maintenanceStop.Token;
         List<Task> maintenance = [Task.Run(() => worker.RunAsync(maintenanceToken))];
+        if (storage.CanSharePublicationState && schedules is not null)
+            maintenance.Add(Task.Run(() => RefreshPeerPublicationsAsync(maintenanceToken)));
         if (schedules is { } managed) maintenance.Add(Task.Run(() => managed.Worker.RunAsync(maintenanceToken)));
         if (protection is not null) maintenance.Add(Task.Run(() => protection.RunAsync(maintenanceToken)));
         if (testTenant is not null)
@@ -405,6 +409,35 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
                 result.Slot.WorkflowDefinitionId, result.Slot.SlotName, result.Diagnostic);
         if (failures.Length > 0)
             throw new InvalidOperationException("The kernel shell could not serve all active publications. See the host log for the affected slots.");
+    }
+
+    private async Task RefreshPeerPublicationsAsync(CancellationToken token)
+    {
+        var logger = logs.CreateLogger<KernelShellRuntime>();
+        using var timer = new PeriodicTimer(PeerPublicationRefreshInterval, clock);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(token))
+            {
+                try
+                {
+                    await using var scope = await scopes.CreateAsyncScopeAsync(persistenceScope);
+                    if (scope.ServiceProvider.GetRequiredService<IWorkflowActivationCoordinator>() is not KernelActivationCoordinator
+                        { CanRefreshPeerPublications: true } coordinator)
+                        return;
+                    await coordinator.RefreshPeerPublicationsAsync(token);
+                }
+                catch (Exception error) when (error is DbException { IsTransient: true } or TimeoutException or ArgumentException or InvalidOperationException)
+                {
+                    logger.LogWarning(error, "Kernel publication refresh failed for tenant {Tenant}. The next pass will retry.", tenant.Tenant);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception error)
+        {
+            logger.LogError(error, "Kernel publication refresh stopped for tenant {Tenant}. Restart the shell after correcting the fault.", tenant.Tenant);
+        }
     }
 
     private async ValueTask<Workflow?> ResolveWorkflowAsync(string artifactId, CancellationToken token)

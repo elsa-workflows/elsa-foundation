@@ -22,6 +22,7 @@ internal abstract class KernelShellStorage
     public abstract bool TakesChildren { get; }
     public abstract bool TakesHttpWaits { get; }
     public abstract bool TakesManagedSchedules { get; }
+    internal virtual bool CanSharePublicationState => false;
     public abstract ValueTask<KernelScheduleProvider> OpenSchedulesAsync(BoundScope scope, CancellationToken token);
     public abstract bool TakesPreparedStarts { get; }
     internal abstract bool TakesDirectTestRuns { get; }
@@ -301,6 +302,7 @@ internal abstract class KernelShellStorage
         public override bool TakesChildren => PostgresPreviewHosting.TakesChildren(OpenDatabase);
         public override bool TakesHttpWaits => PostgresPreviewHosting.TakesHttpWaits(OpenDatabase);
         public override bool TakesManagedSchedules => PostgresPreviewHosting.TakesManagedSchedules(OpenDatabase);
+        internal override bool CanSharePublicationState => true;
         public override bool TakesPreparedStarts => PostgresPreviewHosting.TakesPreparedStarts(OpenDatabase);
         internal override bool TakesDirectTestRuns => _profile == Profile.DirectTestRuns || TakesEphemeralTestRuns;
         internal override bool TakesEphemeralTestRuns => _profile == Profile.EphemeralTestRuns || TakesAttachedTestRuns;

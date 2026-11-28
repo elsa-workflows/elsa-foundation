@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// </remarks>
 public sealed class EfWorkflowActivationAuthority(
     RuntimeDbContext context,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowActivationAuthority
+    IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowActivationAuthority, IWorkflowActivationSnapshot
 {
     private const int PageSize = 100;
     // Provider IN/parameter limits; the slot index prefix (ScopeKeyHash, WorkflowDefinitionIdHash, …) covers each chunk.
@@ -115,6 +115,26 @@ public sealed class EfWorkflowActivationAuthority(
         }
 
         return slots;
+    }
+
+    bool IWorkflowActivationSnapshot.SupportsPeerRefresh =>
+        context.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL";
+
+    async ValueTask<IReadOnlyCollection<WorkflowActivationStamp>> IWorkflowActivationSnapshot.ListActiveAsync(CancellationToken cancellationToken)
+    {
+        var scope = RequireScope();
+        var scopeKey = Encode(scope);
+        var scopeHash = Hash(scope);
+        var rows = await context.WorkflowActivationSlots.AsNoTracking()
+            .Where(row => row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey && row.ActiveActivationId != null)
+            .Select(row => new { row.SlotId, row.WorkflowDefinitionId, row.SlotName, row.ActiveActivationId, row.Revision })
+            .ToArrayAsync(cancellationToken);
+        return rows.Select(row => new WorkflowActivationStamp(
+            EfRuntimeOperationalStoreSupport.Decode(row.SlotId),
+            EfRuntimeOperationalStoreSupport.Decode(row.WorkflowDefinitionId),
+            EfRuntimeOperationalStoreSupport.Decode(row.SlotName),
+            EfRuntimeOperationalStoreSupport.Decode(row.ActiveActivationId!),
+            row.Revision)).ToArray();
     }
 
     public async ValueTask<WorkflowActivationTransition> TryActivateAsync(

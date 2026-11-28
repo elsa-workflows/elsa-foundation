@@ -102,7 +102,10 @@ public sealed class KernelActivationCoordinator(
         var slotId = WorkflowActivationSlotIdentity.Create(definitionId, command.SlotName);
         // A same-artifact request is answered from the slot once its activation serves; a slot that serves an activation
         // this host does not serve yet (after a restart) is served first.
-        if (await authority.FindAsync(definitionId, command.SlotName, cancellationToken) is { ActiveActivationId: not null } occupied)
+        var (occupied, stable) = await ReadServingSlotAsync(definitionId, command.SlotName, cancellationToken);
+        if (!stable)
+            return PeerAuthorityMoved(occupied ?? EmptySlot(definitionId, command.SlotName));
+        if (occupied is { ActiveActivationId: not null })
         {
             var (current, unserved) = await CheckServingAsync(occupied, cancellationToken);
             if (unserved is not null) return unserved;
@@ -112,16 +115,20 @@ public sealed class KernelActivationCoordinator(
 
         // 2. Check the routes and schedules over the serving set with the candidate in its slot's place.
         var requested = new KernelServedSlot(slotId, definitionId, command.SlotName, command.ActivationId, workflow, 0);
-        KernelServingPlan plan;
+        KernelServingPlan? plan;
         try
         {
-            plan = serving.Plan(slotId, requested);
+            plan = await PlanActivationAsync(requested, cancellationToken);
         }
         catch (Exception refused) when (refused is ArgumentException or InvalidOperationException)
         {
             return new(false, WorkflowActivationOutcome.Failed, await CurrentSlotAsync(definitionId, command.SlotName),
                 Diagnostic: Truncate(refused.Message), FailedStep: WorkflowActivationStep.ServingCheck);
         }
+
+        if (plan is null)
+            return PeerAuthorityMoved(await authority.FindAsync(definitionId, command.SlotName, cancellationToken) ??
+                EmptySlot(definitionId, command.SlotName));
 
         var reference = command.Reference with
         {
@@ -161,6 +168,17 @@ public sealed class KernelActivationCoordinator(
 
         return result ?? throw new WorkflowActivationException(definitionId, command.SlotName, command.ActivationId,
             $"Activation '{command.ActivationId}' produced no outcome; the retention lease did not run the activation sequence.");
+    }
+
+    private async ValueTask<KernelServingPlan?> PlanActivationAsync(KernelServedSlot candidate, CancellationToken token)
+    {
+        try { return serving.Plan(candidate.SlotId, candidate); }
+        catch (HttpRouteConflictException) when (CanRefreshPeerPublications && authority is IWorkflowActivationSnapshot snapshot)
+        {
+            // A peer may have removed the conflicting slot since this node last refreshed.
+            var refresh = await RefreshPeerPublicationsUnderLockAsync(snapshot, token, retryMoves: true);
+            return refresh == PeerRefreshResult.Moved ? null : serving.Plan(candidate.SlotId, candidate);
+        }
     }
 
     private async ValueTask<WorkflowActivationResult> RunSequenceAsync(WorkflowActivationCommand command, WorkflowExecutableSourceReference reference,
@@ -291,13 +309,7 @@ public sealed class KernelActivationCoordinator(
         {
             after = state.Schedules.All.Where(schedule => schedule.Workflow == served.Workflow.Id &&
                 schedule.Definition == served.DefinitionId).ToArray();
-            if (schedules.RequiresPublicationClaims && after.Length > 0)
-            {
-                var claims = (await ReadPublicationClaimsAsync(served.ActivationId, cancellationToken))
-                    .Where(claim => claim.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType).ToArray();
-                if (claims.Length != after.Length || after.Any(schedule => !claims.Any(claim => KernelScheduleClaim.Matches(claim, served, schedule))))
-                    throw new InvalidOperationException("The activation's schedules need publication claims before they can be served.");
-            }
+            await RequireScheduleClaimsAsync(served, after, cancellationToken);
             // The slot's revision is known only once the switch commits.
             var committed = served with { Revision = revision };
             if (serving.ProtectsHttpStarts && state.HttpStarts.Values.Any(start => start.Route.Workflow == served.Workflow.Id))
@@ -319,6 +331,15 @@ public sealed class KernelActivationCoordinator(
             await schedules.StopAsync(schedule.Key, revision, cancellationToken);
             await schedules.RegisterRunAsync(schedule.StartKey, null, cancellationToken);
         }
+    }
+
+    private async ValueTask RequireScheduleClaimsAsync(KernelServedSlot served, NativeSchedule[] expected, CancellationToken token)
+    {
+        if (!schedules.RequiresPublicationClaims || expected.Length == 0) return;
+        var claims = (await ReadPublicationClaimsAsync(served.ActivationId, token))
+            .Where(claim => claim.StimulusType == RuntimeKernelScheduleOccurrence.ReservationType).ToArray();
+        if (claims.Length != expected.Length || expected.Any(schedule => !claims.Any(claim => KernelScheduleClaim.Matches(claim, served, schedule))))
+            throw new InvalidOperationException("The activation's schedules need publication claims before they can be served.");
     }
 
     private async ValueTask<WorkflowPublishedStart> ReadHttpPublicationAsync(KernelServedSlot slot,
@@ -562,6 +583,107 @@ public sealed class KernelActivationCoordinator(
 
     // ---- ensuring serving ----------------------------------------------------------------------------------------
 
+    internal bool CanRefreshPeerPublications =>
+        authority is IWorkflowActivationSnapshot { SupportsPeerRefresh: true } && schedules is RuntimeManagedScheduleActors;
+
+    /// <summary>Reconciles this node's serving projection from the shared publication authority.</summary>
+    internal async ValueTask<bool> RefreshPeerPublicationsAsync(CancellationToken cancellationToken)
+    {
+        if (!CanRefreshPeerPublications || !HasPublicationScope() || authority is not IWorkflowActivationSnapshot snapshot)
+            throw new InvalidOperationException("Peer publication refresh requires a scoped shared activation snapshot and managed schedules.");
+
+        if (ServesSnapshot(await snapshot.ListActiveAsync(cancellationToken)))
+            return false;
+
+        var result = await serving.RunAsync(() => RefreshPeerPublicationsUnderLockAsync(snapshot, cancellationToken), cancellationToken);
+        return result == PeerRefreshResult.Applied;
+    }
+
+    private enum PeerRefreshResult { Unchanged, Applied, Moved }
+
+    private async ValueTask<(WorkflowActivationSlot? Slot, bool Stable)> ReadServingSlotAsync(
+        string definitionId, string slotName, CancellationToken token)
+    {
+        var slot = await authority.FindAsync(definitionId, slotName, token);
+        if (slot is not { ActiveActivationId: { } activation } || !CanRefreshPeerPublications ||
+            authority is not IWorkflowActivationSnapshot snapshot ||
+            serving.Find(slot.SlotId) is { } local && local.Revision == slot.Revision && local.ActivationId == activation)
+            return (slot, true);
+
+        var result = await RefreshPeerPublicationsUnderLockAsync(snapshot, token, retryMoves: true);
+        if (result == PeerRefreshResult.Moved) return (slot, false);
+        var latest = await authority.FindAsync(definitionId, slotName, token);
+        var stable = latest is not { ActiveActivationId: { } latestId } ||
+            latest.Revision == slot.Revision && latestId == activation ||
+            serving.Find(latest.SlotId) is { } refreshed && refreshed.Revision == latest.Revision && refreshed.ActivationId == latestId;
+        return (latest, stable);
+    }
+
+    private static WorkflowActivationResult PeerAuthorityMoved(WorkflowActivationSlot slot) =>
+        new(false, WorkflowActivationOutcome.Conflict, slot, Conflict: WorkflowActivationConflict.RevisionMismatch,
+            Diagnostic: "The active publications changed during route validation. Retry the publication.");
+
+    private bool ServesSnapshot(IReadOnlyCollection<WorkflowActivationStamp> active)
+    {
+        var local = serving.Slots.Where(slot => slot.Revision > 0).ToDictionary(slot => slot.SlotId, StringComparer.Ordinal);
+        return local.Count == active.Count && active.All(slot => KernelPeerRouteGuard.Matches(local.GetValueOrDefault(slot.SlotId), slot));
+    }
+
+    private async ValueTask<PeerRefreshResult> RefreshPeerPublicationsUnderLockAsync(IWorkflowActivationSnapshot snapshot, CancellationToken token,
+        bool retryMoves = false)
+    {
+        var material = new KernelPeerRouteGuard(sourceReferenceStore, executableStore, serving);
+        for (var remaining = retryMoves ? 3 : 1; remaining > 0; remaining--)
+        {
+            var active = await snapshot.ListActiveAsync(token);
+            if (ServesSnapshot(active)) return PeerRefreshResult.Unchanged;
+
+            var publications = new List<KernelServedSlot>(active.Count);
+            foreach (var slot in active)
+            {
+                var served = serving.Find(slot.SlotId);
+                if (KernelPeerRouteGuard.Matches(served, slot))
+                    publications.Add(served!);
+                else if (await ReadPeerPublicationAsync(slot, material, token) is { } refreshed)
+                    publications.Add(refreshed);
+            }
+
+            var confirmed = await snapshot.ListActiveAsync(token);
+            if (!active.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)
+                .SequenceEqual(confirmed.OrderBy(slot => slot.SlotId, StringComparer.Ordinal)))
+                continue;
+
+            // Build from the confirmed result. Departed routes no longer conflict with their replacements.
+            serving.ApplyPeerPublications(serving.PlanPeerPublications(publications));
+            return PeerRefreshResult.Applied;
+        }
+
+        return PeerRefreshResult.Moved;
+    }
+
+    private async ValueTask<KernelServedSlot?> ReadPeerPublicationAsync(WorkflowActivationStamp slot, KernelPeerRouteGuard material,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // The shared switch owns reservations, schedule claims and Event adoption. A peer only reads them.
+            if (!(await ProjectionStatesAsync(slot.ActivationId, cancellationToken)).All(state => state == WorkflowActivationProjectionState.Active))
+                return null;
+
+            var (served, source) = await material.ReadAsync(slot, cancellationToken);
+            await RequireScheduleClaimsAsync(served, [.. serving.SchedulesOf(served.Workflow)], cancellationToken);
+            var publication = await ReadHttpPublicationAsync(served, source, cancellationToken);
+            return serving.ProtectsHttpStarts && NativeStartTriggers.StartEndpoints(served.Workflow).Any()
+                ? served with { HttpPublication = publication }
+                : served;
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException or InvalidDataException)
+        {
+            logger?.LogWarning(error, "Activation {ActivationId} could not be restored on this peer", slot.ActivationId);
+            return null;
+        }
+    }
+
     public async ValueTask<WorkflowActivationResult> EnsureServingAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
@@ -570,7 +692,9 @@ public sealed class KernelActivationCoordinator(
             return ScopeRefusal(workflowDefinitionId, slotName);
         return await serving.RunAsync(async () =>
         {
-            var slot = await authority.FindAsync(workflowDefinitionId, slotName, cancellationToken);
+            var (slot, stable) = await ReadServingSlotAsync(workflowDefinitionId, slotName, cancellationToken);
+            if (!stable)
+                return PeerAuthorityMoved(slot ?? EmptySlot(workflowDefinitionId, slotName));
             if (slot?.ActiveActivationId is null)
             {
                 var empty = slot ?? EmptySlot(workflowDefinitionId, slotName);
