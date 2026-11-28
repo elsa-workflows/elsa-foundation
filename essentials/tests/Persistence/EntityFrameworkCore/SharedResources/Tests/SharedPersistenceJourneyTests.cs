@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using Elsa.Workbench.Tests;
@@ -14,17 +15,17 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
     {
         Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
 
-        await using var host = new SharedPersistenceHostFixture(targets, SharedPersistenceHostFixture.PrimaryResourceSettings());
+        await using var host = new SharedPersistenceHostFixture(targets, ActorPostgreSql(SharedPersistenceHostFixture.PrimaryResourceSettings()));
         await host.StartAsync();
         var journey = await PublishAndExecuteAsync(host.Process.Client);
         var client = host.Process.Client;
-        var (marker, reusable, versionId, executionId) = journey;
+        var (marker, reusable, versionId, executionId, _, _) = journey;
 
         await host.RestartAsync();
         client = host.Process.Client;
         await SignInAsync(client);
         var persisted = await GetAsync(client, $"runtime/workflows/instances/{executionId}");
-        Assert.Contains((string?)persisted["instance"]?["status"], new[] { "Completed", "Finished" });
+        AssertCompletedActor(persisted, journey);
         var persistedVersion = await GetAsync(client, $"design/workflows/versions/{versionId}");
         Assert.NotNull(persistedVersion);
         var activityCatalog = await GetAsync(client, $"design/activities/definitions?search={Uri.EscapeDataString(marker)}");
@@ -38,14 +39,14 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
                  {
                      "elsa_activity_definitions",
                      "elsa_workflow_definitions_v2",
-                     "elsa_publication_records",
-                     "elsa_runtime_workflow_execution_state"
+                     "elsa_publication_records"
                  })
         {
             await using var count = primary.CreateCommand();
             count.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";
             Assert.True((long)(await count.ExecuteScalarAsync())! > 0, $"{table} has no persisted rows on the shared target.");
         }
+        await AssertPhysicalActorAsync(targets.ActorConnectionString, executionId);
         foreach (var history in new[]
                  {
                      "__EFMigrationsHistory_ElsaActivitiesDesign",
@@ -82,7 +83,7 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
         await using var diagnostics = new NpgsqlConnection(targets.DiagnosticsConnectionString);
         await diagnostics.OpenAsync();
         await using var check = diagnostics.CreateCommand();
-        check.CommandText = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename IN ('__EFMigrationsHistory_ElsaRuntime', '__EFMigrationsHistory_ElsaWorkflowsDesign', '__EFMigrationsHistory_ElsaActivitiesDesign', '__EFMigrationsHistory_ElsaPublishingSnapshotReview', 'elsa_activity_definitions', 'elsa_workflow_definitions_v2', 'elsa_publication_records', 'elsa_runtime_workflow_execution_state')";
+        check.CommandText = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename IN ('__EFMigrationsHistory_ElsaRuntime', '__EFMigrationsHistory_ElsaWorkflowsDesign', '__EFMigrationsHistory_ElsaActivitiesDesign', '__EFMigrationsHistory_ElsaPublishingSnapshotReview', 'elsa_activity_definitions', 'elsa_workflow_definitions_v2', 'elsa_publication_records', 'FoundationActorList')";
         Assert.Equal(0L, await check.ExecuteScalarAsync());
     }
 
@@ -114,12 +115,14 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
         var started = await PostAsync(client, $"runtime/workflows/executables/{artifactId}/execute",
             new { sourceReferenceId });
         var executionId = Required(started, "workflowExecutionId");
+        var journey = new WorkflowJourney(marker, reusable, versionId, executionId, artifactId, sourceReferenceId);
         var completed = await WaitForCompletionAsync(client, executionId);
-        Assert.Contains((string?)completed["instance"]?["status"], new[] { "Completed", "Finished" });
-        Assert.Contains(completed["activities"]!.AsArray(), activity =>
-            StringComparer.OrdinalIgnoreCase.Equals((string?)activity?["activityType"], reusable.TypeKey) &&
-            (string?)activity?["status"] is "Completed" or "Finished");
-        return new WorkflowJourney(marker, reusable, versionId, executionId);
+        AssertCompletedActor(completed, journey);
+        var activityPage = await GetAsync(client, $"runtime/workflows/instances/{executionId}/activity-executions?limit=50");
+        Assert.Contains(activityPage["items"]!.AsArray(), item =>
+            StringComparer.OrdinalIgnoreCase.Equals((string?)item?["execution"]?["activityType"], reusable.TypeKey) &&
+            (string?)item?["execution"]?["status"] is "Completed" or "Finished");
+        return journey;
     }
 
     [SkippableFact]
@@ -127,7 +130,7 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
     {
         Skip.IfNot(targets.IsAvailable, targets.SkipReason ?? "Docker/PostgreSQL unavailable.");
         await using var host = new SharedPersistenceHostFixture(targets,
-            SharedPersistenceHostFixture.DiagnosticsResourceSettings(),
+            ActorPostgreSql(SharedPersistenceHostFixture.DiagnosticsResourceSettings()),
             SharedPersistenceHostFixture.RemoveLegacyDiagnosticsTargets);
         await host.StartAsync();
         var journey = await PublishAndExecuteAsync(host.Process.Client);
@@ -138,10 +141,11 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
         var client = host.Process.Client;
         await SignInAsync(client);
         var execution = await GetAsync(client, $"runtime/workflows/instances/{journey.ExecutionId}");
-        Assert.Contains((string?)execution["instance"]?["status"], new[] { "Completed", "Finished" });
+        AssertCompletedActor(execution, journey);
+        await AssertPhysicalActorAsync(targets.ActorConnectionString, journey.ExecutionId);
         Assert.NotNull(await GetAsync(client, $"design/workflows/versions/{journey.VersionId}"));
         Assert.True(await HasActivityAsync(targets.PrimaryConnectionString, journey.Marker));
-        Assert.False(await HasTableAsync(targets.DiagnosticsConnectionString, "elsa_runtime_workflow_execution_state"));
+        Assert.False(await HasTableAsync(targets.DiagnosticsConnectionString, "FoundationActorList"));
     }
 
     [SkippableFact]
@@ -343,15 +347,59 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
 
     private static async Task<JsonNode> WaitForCompletionAsync(HttpClient client, string executionId)
     {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
-        do
+        var path = $"runtime/workflows/instances/{executionId}";
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var token = deadline.Token;
+        try
         {
-            var result = await GetAsync(client, $"runtime/workflows/instances/{executionId}");
-            if ((string?)result["instance"]?["status"] is "Completed" or "Finished" or "Faulted" or "Cancelled")
-                return result;
-            await Task.Delay(500);
-        } while (DateTimeOffset.UtcNow < deadline);
-        throw new TimeoutException("The shared-resource workflow did not reach a terminal state.");
+            while (true)
+            {
+                using var response = await client.GetAsync(path, token);
+                // Accepted Actor ingress can precede the first committed turn.
+                if (response.StatusCode != HttpStatusCode.NotFound)
+                {
+                    Assert.True(response.IsSuccessStatusCode, $"GET {path} returned {(int)response.StatusCode}.");
+                    var result = (await response.Content.ReadFromJsonAsync<JsonNode>(cancellationToken: token))!;
+                    if ((string?)result["instance"]?["status"] is "Completed" or "Finished" or "Faulted" or "Cancelled")
+                        return result;
+                }
+                await Task.Delay(250, token);
+            }
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
+            throw new TimeoutException($"The shared-resource workflow '{executionId}' did not reach a terminal state.");
+        }
+    }
+
+    private IReadOnlyDictionary<string, string> ActorPostgreSql(IReadOnlyDictionary<string, string> settings) => new Dictionary<string, string>(settings)
+    {
+        ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:Provider"] = "PostgreSql",
+        ["CShells:Shells:default:Features:WorkflowsRuntimeKernelHosting:PostgresConnectionString"] = targets.ActorConnectionString
+    };
+
+    private static void AssertCompletedActor(JsonNode details, WorkflowJourney journey)
+    {
+        var instance = details["instance"];
+        Assert.Contains((string?)instance?["status"], new[] { "Completed", "Finished" });
+        Assert.Equal(journey.ExecutionId, Required(instance, "workflowExecutionId"));
+        Assert.Equal(journey.ArtifactId, Required(instance, "artifactId"));
+        Assert.Equal(journey.VersionId, Required(instance, "definitionVersionId"));
+        Assert.Equal(journey.SourceReferenceId, Required(instance, "sourceReferenceId"));
+    }
+
+    private static async Task AssertPhysicalActorAsync(string connectionString, string executionId)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT count(*) FROM "FoundationActorList"
+            WHERE "Tenant" = 'default' AND "Reference" = @reference
+              AND "EndedAt" IS NOT NULL AND "TerminalRevision" > 0
+            """;
+        command.Parameters.AddWithValue("reference", executionId);
+        Assert.Equal(1L, await command.ExecuteScalarAsync());
     }
 
     private static async Task<JsonNode> GetAsync(HttpClient client, string path)
@@ -376,5 +424,6 @@ public sealed class SharedPersistenceJourneyTests(PostgreSqlTargetFixture target
     }
 
     private sealed record ReusablePublication(string DefinitionId, string TypeKey, string VersionId);
-    private sealed record WorkflowJourney(string Marker, ReusablePublication Reusable, string VersionId, string ExecutionId);
+    private sealed record WorkflowJourney(string Marker, ReusablePublication Reusable, string VersionId, string ExecutionId,
+        string ArtifactId, string SourceReferenceId);
 }
