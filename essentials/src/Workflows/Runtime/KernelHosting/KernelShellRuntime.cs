@@ -70,6 +70,7 @@ internal sealed class KernelShellRuntime(KernelShellStorage storage, KernelServi
         var model = new NativeExecutionModel(serving.Registry, new NativeExecutionOptions
         {
             Scripts = new ScopedScripts(scopes),
+            ConsoleOutput = Console.Out,
             Http = new NativeHttpOptions { Client = _client },
             Expressions = expressions,
             SelfSends = serving.Capabilities.SelfSends,

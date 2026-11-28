@@ -34,6 +34,22 @@ public sealed class MappedRunTests
     }
 
     [Fact]
+    public async Task Console_activities_write_to_their_own_model_output()
+    {
+        var workflow = Native.Wf.Workflow("console", Native.Wf.Sequence("root",
+            Native.Wf.WriteLine("line", "first"), Native.Wf.WriteLines("lines", Native.Binding.Literal(new[] { "second", "third" }))));
+        using var first = new StringWriter();
+        using var second = new StringWriter();
+
+        await Task.WhenAll(NativeTurn.StartAsync(workflow, new Native.NativeExecutionOptions { ConsoleOutput = first }),
+            NativeTurn.StartAsync(workflow, new Native.NativeExecutionOptions { ConsoleOutput = second }));
+
+        var expected = string.Join(Environment.NewLine, ["first", "second", "third", ""]);
+        Assert.Equal(expected, first.ToString());
+        Assert.Equal(expected, second.ToString());
+    }
+
+    [Fact]
     public async Task A_loop_body_reads_its_item_and_index_on_the_native_model()
     {
         var root = Sequence("root",
