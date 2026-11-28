@@ -1,8 +1,13 @@
 using System.Runtime.CompilerServices;
+using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Values;
 
+[assembly: TypeForwardedTo(typeof(CachingWorkflowExecutableStore))]
+[assembly: TypeForwardedTo(typeof(InvalidatingWorkflowExecutableStore))]
 [assembly: TypeForwardedTo(typeof(OccupiedActivationSlots))]
+[assembly: TypeForwardedTo(typeof(WorkflowExecutableCache))]
+[assembly: TypeForwardedTo(typeof(WorkflowExecutableCacheTelemetry))]
 [assembly: TypeForwardedTo(typeof(WorkflowExecutableDependencyGraph))]
 [assembly: TypeForwardedTo(typeof(WorkflowExecutableDependencyGraphException))]
 [assembly: TypeForwardedTo(typeof(WorkflowExecutableDependencyGraphFailureKind))]
