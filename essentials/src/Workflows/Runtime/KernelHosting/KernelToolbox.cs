@@ -16,7 +16,10 @@ public static class KernelToolbox
         if (!WorkflowsRuntimeKernelFeature.IsComposedIn(provider))
             return [];
 
-        var capabilities = provider.GetRequiredService<KernelServing>().Capabilities;
+        if (provider.GetService<KernelServing>() is not { } serving)
+            return NativeActivityCatalog.Unsupported;
+
+        var capabilities = serving.Capabilities;
         var unavailable = NativeActivityCatalog.Supported.Where(activity =>
             (!capabilities.HttpEndpoints && activity.Value == typeof(HttpEndpoint)) ||
             (!capabilities.Schedules && (activity.Value == typeof(Kernel.Native.Timer) || activity.Value == typeof(Cron))));
