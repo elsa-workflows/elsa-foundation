@@ -174,15 +174,12 @@ public sealed partial class KernelStandalonePreparedStartTests
             services.AddLogging(builder => builder.AddSimpleConsole().SetMinimumLevel(LogLevel.Warning));
             services.AddSingleton<TimeProvider>(clock);
             services.AddSingleton<IWellKnownTypeRegistry, KernelPublishedExecuteTests.FixtureTypes>();
-            services.AddWorkflowRuntime();
-            services.AddRuntimeEntityFrameworkCore(new()
-            {
-                Provider = provider, ConnectionString = runtime,
-                RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
-            });
+            new Elsa.Events.EventsFeature().ConfigureServices(services);
+            KernelRuntimeFixture.Add(services, provider, runtime);
+            new RuntimePreparedStandaloneEntityFrameworkCoreFeature().ConfigureServices(services);
             new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation }
                 .ConfigureServices(services);
-            services.AddPersistenceModes();
+            new WorkflowsRuntimeKernelFeature().ConfigureServices(services);
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             services.AddScoped<IRuntimePreparedStartAttemptProof>(sp => new KernelStandalonePreparedStartProof(Persistence, ownerScope,
                 () => sp.GetRequiredService<KernelShellStorage>().BindPreparedStartQualification(ownerScope)));

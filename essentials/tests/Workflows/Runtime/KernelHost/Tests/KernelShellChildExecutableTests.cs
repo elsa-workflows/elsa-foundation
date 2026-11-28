@@ -197,15 +197,10 @@ public sealed class KernelShellChildExecutableTests
             services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
             services.AddLogging(builder => builder.AddSimpleConsole().SetMinimumLevel(LogLevel.Warning));
             services.Configure<WorkflowExecutableGarbageCollectionOptions>(options => options.ArtifactCreationGracePeriod = TimeSpan.Zero);
-            services.AddWorkflowRuntime();
-            services.AddRuntimeEntityFrameworkCore(new()
-            {
-                Provider = provider, ConnectionString = runtime,
-                RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
-            });
+            KernelRuntimeFixture.Add(services, provider, runtime);
             new WorkflowsRuntimeKernelHostingFeature { Provider = provider, SqlitePath = path, PostgresConnectionString = foundation }
                 .ConfigureServices(services);
-            services.AddPersistenceModes();
+            new WorkflowsRuntimeKernelFeature().ConfigureServices(services);
             new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }

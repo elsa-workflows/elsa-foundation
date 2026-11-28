@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Options;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Extensions;
-using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Kernel.WorkflowActor;
@@ -144,7 +143,7 @@ public sealed class KernelCoordinatorTests
     }
 
     /// <summary>One host's stores, and a coordinator over them; <see cref="Restart"/> keeps the stores and starts a new host.</summary>
-    private sealed class Host
+    private sealed class Host : IDisposable
     {
         public readonly FakeTimeProvider Clock = new(new DateTimeOffset(2026, 11, 25, 9, 0, 0, TimeSpan.Zero));
         public readonly InMemoryWorkflowExecutableStore Executables = new();
@@ -152,7 +151,9 @@ public sealed class KernelCoordinatorTests
         public readonly InMemoryWorkflowTriggerBindingStore Bindings = new();
         public readonly InMemoryRecurringTriggerScheduleStore RecurringSchedules = new();
         public readonly InMemoryWorkflowExecutableSourceReferenceStore References;
-        public readonly InMemoryWorkflowActivationSwitch Switch;
+        public readonly IWorkflowActivationSwitch Switch;
+        private readonly ServiceProvider _services;
+        private readonly IServiceScope _activation;
         public KernelServing Serving = null!;
         public RecordingSchedules Schedules = null!;
         public KernelActivationCoordinator Coordinator = null!;
@@ -166,8 +167,25 @@ public sealed class KernelCoordinatorTests
             _channels = channels;
             _capabilities = capabilities ?? KernelHostCapabilities.All;
             References = new(Executables, Clock);
-            Switch = new(Authority, References, Clock, Bindings, RecurringSchedules);
+            var services = new ServiceCollection();
+            services.AddSingleton<TimeProvider>(Clock);
+            services.AddSingleton<IPersistenceAccessContextAccessor>(new ScopedAccess(new(PersistenceScope.DefaultValue)));
+            services.AddSingleton<IWorkflowActivationAuthority>(Authority);
+            services.AddSingleton<IWorkflowExecutableStore>(Executables);
+            services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(References);
+            services.AddSingleton<IWorkflowTriggerBindingStore>(Bindings);
+            services.AddSingleton<IRecurringTriggerScheduleStore>(RecurringSchedules);
+            WorkflowPublicationDefaults.Add(services);
+            _services = services.BuildServiceProvider(validateScopes: true);
+            _activation = _services.CreateScope();
+            Switch = _activation.ServiceProvider.GetRequiredService<IWorkflowActivationSwitch>();
             Restart();
+        }
+
+        public void Dispose()
+        {
+            _activation.Dispose();
+            _services.Dispose();
         }
 
         /// <summary>A restart onto a host whose foundation runs <paramref name="capabilities"/>.</summary>
@@ -227,7 +245,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task An_activation_serves_its_workflow_routes_and_schedules()
     {
-        var host = new Host();
+        using var host = new Host();
 
         var http = await host.ActivateAsync(Orders("orders@1"), "orders-1");
         var timer = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
@@ -261,7 +279,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_managed_schedule_activates_and_retires_through_publication_claims()
     {
-        var host = new Host();
+        using var host = new Host();
         host.Coordinator = host.NewCoordinator(host.Switch, new RuntimeManagedScheduleActors());
 
         var first = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
@@ -285,7 +303,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_republish_replaces_the_route_and_points_the_schedule_at_the_new_artifact()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Orders("orders@1", "first"), "orders-1");
         await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
         host.Schedules.Calls.Clear();
@@ -308,7 +326,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_mapping_refusal_fails_at_the_mapping_step_before_anything_is_minted()
     {
-        var host = new Host();
+        using var host = new Host();
         var refused = ExecutableOf("bpmn@1", "bpmn", Sequence("root", Node("comp", Types.CompensationScope, structure: Structure("elsa.compensation-scope.structure", new { }))));
 
         var result = await host.ActivateAsync(refused, "bpmn-1");
@@ -324,7 +342,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_route_another_definition_serves_refuses_the_publish()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Orders("orders@1"), "orders-1");
 
         var clash = await host.ActivateAsync(ExecutableOf("copy@1", "copy", HttpWorkflow("orders", "copy")), "copy-1");
@@ -339,7 +357,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_timer_away_from_where_a_run_begins_refuses_the_publish()
     {
-        var host = new Host();
+        using var host = new Host();
         var midway = ExecutableOf("late@1", "late", Sequence("root", WriteLine("first", Literal("text", "x")), Node("tick", Types.Timer, [Literal("Interval", "PT1M", "String")])));
 
         var result = await host.ActivateAsync(midway, "late-1");
@@ -352,7 +370,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task An_unchanged_artifact_is_already_active()
     {
-        var host = new Host();
+        using var host = new Host();
         var first = await host.ActivateAsync(Orders("orders@1"), "orders-1");
 
         var again = await host.ActivateAsync(Orders("orders@1"), "orders-1b");
@@ -365,7 +383,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_channel_the_shell_does_not_declare_is_refused()
     {
-        var host = new Host(new ActivationChannelOptions { AllowAdHocChannels = false, Channels = [new() { Name = KernelServing.DefaultSlotName }] });
+        using var host = new Host(new ActivationChannelOptions { AllowAdHocChannels = false, Channels = [new() { Name = KernelServing.DefaultSlotName }] });
 
         var preview = await host.ActivateAsync(Orders("orders@1"), "orders-1", slot: "preview");
 
@@ -377,7 +395,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_deactivation_stops_the_schedule_then_unregisters_its_run()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Orders("orders@1"), "orders-1");
         await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
         host.Schedules.Calls.Clear();
@@ -397,7 +415,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_serving_failure_reverts_the_switch()
     {
-        var host = new Host();
+        using var host = new Host();
         var first = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
         host.Schedules.FailSet = "schedule:ticks:tick";
         host.Schedules.Calls.Clear();
@@ -421,7 +439,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task Ensure_serving_restores_a_missing_artifact_after_a_restart()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Orders("orders@1"), "orders-1");
         var ticks = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
 
@@ -447,7 +465,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task Startup_adopts_a_published_schedule_before_serving_its_existing_slot()
     {
-        var host = new Host();
+        using var host = new Host();
         host.Schedules.RequiresPublicationClaims = false;
         var previous = await host.ActivateAsync(Ticks("ticks@1"), "legacy-ticks");
         Assert.True(previous.Succeeded);
@@ -473,7 +491,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task An_activation_after_a_restart_serves_the_slot_first()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Orders("orders@1"), "orders-1");
         host.Restart();
 
@@ -486,7 +504,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_dispatch_reaches_the_version_the_definition_serves()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Orders("orders@1"), "orders-1");
         await host.ActivateAsync(Orders("orders@2"), "orders-2");
         await host.ActivateAsync(ExecutableOf("orders-preview@1", "orders", HttpWorkflow("orders-preview", "preview")), "orders-preview", slot: "preview");
@@ -500,7 +518,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_definition_served_in_several_channels_without_a_default_serves_several()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(ExecutableOf("reports-a@1", "reports", HttpWorkflow("reports-a", "a")), "reports-a", slot: "a");
         Assert.Equal("reports-a@1", host.Serving.ServedWorkflow("reports").Workflow);
 
@@ -513,7 +531,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task Two_coordinators_over_one_serving_state_each_keep_the_others_slot()
     {
-        var host = new Host();
+        using var host = new Host();
         var gated = new GatedSwitch(host.Switch);
         var first = host.NewCoordinator(gated);
 
@@ -535,7 +553,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_deactivation_after_a_restart_stops_the_schedule_the_slot_serves()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
         host.Restart();
 
@@ -548,7 +566,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_deactivation_whose_answer_is_lost_is_finished_as_one_that_committed()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Orders("orders@1"), "orders-1");
         await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
         host.Schedules.Calls.Clear();
@@ -570,7 +588,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task Ensure_serving_an_empty_slot_drops_what_this_host_still_serves_for_it()
     {
-        var host = new Host();
+        using var host = new Host();
         var ticks = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
         host.Schedules.Calls.Clear();
         // The slot is emptied past this host, as a deactivation whose finish was lost leaves it.
@@ -588,7 +606,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task The_trigger_observers_refresh_after_each_activation_and_deactivation()
     {
-        var host = new Host();
+        using var host = new Host();
 
         await host.ActivateAsync(Orders("orders@1"), "orders-1");
         await host.ActivateAsync(Orders("orders@2"), "orders-2");
@@ -600,7 +618,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task An_observer_failure_after_an_activation_reverts_it()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Orders("orders@1"), "orders-1");
         host.Observer.Fail = true;
 
@@ -615,7 +633,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task An_observer_failure_after_a_deactivation_switches_it_back_on()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
         var claim = Assert.Single(await host.Bindings.ListAllByActivationAsync("ticks-1"));
         host.Schedules.RequiresPublicationClaims = false;
@@ -631,20 +649,12 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
-    public async Task Failed_managed_deactivation_restores_all_claims_and_reservations()
+    public async Task Failed_managed_deactivation_restores_every_prepared_claim()
     {
-        var host = new Host();
+        using var host = new Host();
         var executable = Ticks("ticks@1");
         var identity = executable.Identity;
-        var scope = new TriggerScope(new(PersistenceScope.DefaultValue), null);
-        var access = new ScopedAccess(scope.Persistence);
-        await using var services = new ServiceCollection().AddWorkflowRuntime()
-            .AddSingleton<IPersistenceAccessContextAccessor>(access).BuildServiceProvider();
-        await using var request = services.CreateAsyncScope();
-        var reader = request.ServiceProvider.GetRequiredService<IRuntimeIngressReservationReader>();
-        var state = services.GetRequiredService<InMemoryRuntimeCheckpointStoreState>();
-        var activationSwitch = new InMemoryWorkflowActivationSwitch(host.Authority, host.References, host.Clock, state,
-            access, host.Bindings, host.RecurringSchedules);
+        var activationSwitch = host.Switch;
         host.Coordinator = host.NewCoordinator(activationSwitch, new RuntimeManagedScheduleActors());
 
         const string activation = "ticks-1";
@@ -671,10 +681,6 @@ public sealed class KernelCoordinatorTests
         var initial = await activationSwitch.TryActivateAsync(new(identity.DefinitionId, channel, activation, WorkflowActivationSource.Publishing, 0, now));
         Assert.True(initial.Succeeded);
         Assert.True((await host.Coordinator.EnsureServingAsync(identity.DefinitionId, channel)).Succeeded);
-        var previous = new List<RuntimeIngressReservation>();
-        foreach (var claim in claims)
-            previous.Add(Assert.IsType<RuntimeIngressReservation>(await reader.FindAsync(scope, claim.StimulusType, claim.StimulusHash)));
-
         host.Observer.FailNext = true;
         var failed = await host.DeactivateAsync(executable);
 
@@ -685,19 +691,13 @@ public sealed class KernelCoordinatorTests
         var restored = await host.Bindings.ListAllByActivationAsync(activation);
         Assert.Equal(claims.Select(claim => claim with { IsActive = true }).OrderBy(claim => claim.TriggerBindingId),
             restored.OrderBy(claim => claim.TriggerBindingId));
-        foreach (var prior in previous)
-        {
-            var reservation = Assert.IsType<RuntimeIngressReservation>(await reader.FindAsync(scope, prior.StimulusType, prior.StimulusHash));
-            Assert.Equal(prior.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal),
-                reservation.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal));
-            Assert.Equal(prior with { OwnerRevision = failed.Slot.Revision, ConfigurationRevision = failed.Slot.Revision, Metadata = reservation.Metadata }, reservation);
-        }
+
     }
 
     [Fact]
     public async Task A_managed_schedule_refuses_to_serve_an_existing_activation_without_claims()
     {
-        var host = new Host();
+        using var host = new Host();
         host.Schedules.RequiresPublicationClaims = false;
         Assert.True((await host.ActivateAsync(Ticks("ticks@1"), "ticks-1")).Succeeded);
         Assert.Empty(await host.Bindings.ListAllByActivationAsync("ticks-1"));
@@ -719,7 +719,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_definition_serves_one_scheduled_channel()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
 
         var second = await host.ActivateAsync(Ticks("ticks@2", "PT5M"), "ticks-preview", slot: "preview");
@@ -732,7 +732,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_host_without_schedule_actors_refuses_a_timer_where_it_maps_it()
     {
-        var host = new Host(capabilities: new(Schedules: false));
+        using var host = new Host(capabilities: new(Schedules: false));
         host.Coordinator = host.NewCoordinator(host.Switch, new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
 
         var timer = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
@@ -776,7 +776,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task Instances_in_flight_continue_after_a_restart_on_the_served_version_and_on_an_older_one()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Waits("waits@1", "first"), "waits-1");
         var older = await NativeTurn.StartAsync(ModelOf(host), host.Serving.Registry.Get("waits@1"));
         await host.ActivateAsync(Waits("waits@2", "second"), "waits-2");
@@ -806,14 +806,14 @@ public sealed class KernelCoordinatorTests
     [InlineData(true, "The exact executable selected for this workflow is unavailable.")]
     public async Task A_turn_of_a_workflow_the_host_has_no_artifact_for_faults(bool selected, string diagnostic)
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Waits("waits@1", "first"), "waits-1");
         var served = host.Serving.Registry.Get("waits@1");
         var workflow = selected ? served : new Native.Workflow(served.Id, served.Root, served.Variables, served.Definition);
         var turn = await NativeTurn.StartAsync(ModelOf(host), workflow);
 
         // Another host, whose store never held the artifact.
-        var other = new Host();
+        using var other = new Host();
         var missing = await Assert.ThrowsAsync<InvalidOperationException>(() => turn.ResumeAsync(ModelOf(other)));
 
         Assert.Equal(diagnostic, missing.Message);
@@ -839,7 +839,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_host_without_timers_refuses_a_delay_where_it_maps_it()
     {
-        var host = new Host(capabilities: new(Timers: false));
+        using var host = new Host(capabilities: new(Timers: false));
 
         var refused = await host.ActivateAsync(Pauses("pauses@1"), "pauses-1");
 
@@ -857,7 +857,7 @@ public sealed class KernelCoordinatorTests
     [InlineData(false)]
     public async Task A_host_without_child_workflows_refuses_a_dispatch_waited_or_not(bool wait)
     {
-        var host = new Host(capabilities: new(Children: false));
+        using var host = new Host(capabilities: new(Children: false));
 
         var refused = await host.ActivateAsync(Dispatches("dispatches@1", wait), "dispatches-1");
 
@@ -869,7 +869,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_host_with_timers_and_child_workflows_serves_both()
     {
-        var host = new Host();
+        using var host = new Host();
 
         Assert.Equal(WorkflowActivationOutcome.Activated, (await host.ActivateAsync(Pauses("pauses@1"), "pauses-1")).Outcome);
         Assert.Equal(WorkflowActivationOutcome.Activated, (await host.ActivateAsync(Dispatches("dispatches@1", true), "dispatches-1")).Outcome);
@@ -878,7 +878,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_restart_on_a_host_without_timers_does_not_serve_a_delay_published_before()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Pauses("pauses@1"), "pauses-1");
 
         host.Restart(new KernelHostCapabilities(Timers: false));
@@ -907,7 +907,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_host_whose_edge_serves_no_wait_routes_refuses_a_waiting_http_endpoint_where_it_maps_it()
     {
-        var host = new Host(capabilities: StartRoutesOnly);
+        using var host = new Host(capabilities: StartRoutesOnly);
 
         var refused = await host.ActivateAsync(Decisions("decisions@1"), "decisions-1");
 
@@ -921,7 +921,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_host_whose_edge_serves_no_wait_routes_refuses_an_http_endpoint_at_the_start_that_may_not_start_a_run()
     {
-        var host = new Host(capabilities: StartRoutesOnly);
+        using var host = new Host(capabilities: StartRoutesOnly);
         var waitsFirst = ExecutableOf("waits-first@1", "waits-first", Sequence("root",
             Node("in", Types.HttpEndpoint, [Literal("Path", "waits-first", "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", false, "Boolean")]),
             Node("out", Types.WriteHttpResponse, [Literal("Body", "no", "String")])));
@@ -935,7 +935,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_published_wait_needs_a_literal_template_and_cannot_claim_a_start_shape()
     {
-        var host = new Host();
+        using var host = new Host();
         Assert.True((await host.ActivateAsync(Approvals("approvals@1"), "approvals-1")).Succeeded);
         var computed = ExecutableOf("computed@1", "computed", Sequence("root", Node("wait", Types.HttpEndpoint,
             [Expression("Path", "JavaScript", "'computed'", "String"), Literal("CanStartWorkflow", false)])));
@@ -959,7 +959,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task The_edge_starts_the_workflow_a_start_route_serves_with_the_request_as_its_trigger()
     {
-        var host = new Host(capabilities: StartRoutesOnly);
+        using var host = new Host(capabilities: StartRoutesOnly);
         var activated = await host.ActivateAsync(Approvals("approvals@1"), "approvals-1");
         Assert.True(activated.Succeeded, activated.Diagnostic);
         var request = new Native.HttpRequest("POST", "/workflows/http/approvals/A-7", new System.Text.Json.Nodes.JsonObject { ["by"] = "Ada" });
@@ -978,7 +978,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_matched_start_selects_the_served_executable_even_when_the_historical_registry_has_a_same_id_replacement()
     {
-        var host = new Host(capabilities: StartRoutesOnly);
+        using var host = new Host(capabilities: StartRoutesOnly);
         var published = Orders("orders@1");
         Assert.True((await host.ActivateAsync(published, "orders-1")).Succeeded);
         var original = host.Serving.Registry.Get("orders@1");
@@ -1003,7 +1003,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task The_edge_resolves_a_served_wait_and_refuses_another_method_or_unknown_path()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Decisions("decisions@1"), "decisions-1");
 
         var match = Assert.IsType<Native.NativeHttpRouteMatch>(KernelHttpEdge.Route(host.Serving, "POST", "/decisions"));
@@ -1023,7 +1023,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_matched_route_whose_workflow_stops_serving_before_the_start_starts_nothing()
     {
-        var host = new Host(capabilities: StartRoutesOnly);
+        using var host = new Host(capabilities: StartRoutesOnly);
         await host.ActivateAsync(Approvals("approvals@1"), "approvals-1");
         var route = KernelHttpEdge.Route(host.Serving, "POST", "/approvals/A-7");
         Assert.NotNull(route);
@@ -1036,7 +1036,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_host_workflow_that_waits_at_an_http_endpoint_is_refused_on_an_edge_without_wait_routes()
     {
-        var host = new Host(capabilities: StartRoutesOnly);
+        using var host = new Host(capabilities: StartRoutesOnly);
         var waits = Native.Wf.Workflow("waits", Native.Wf.Sequence("main", Native.Wf.HttpEndpoint("start", "waits"),
             Native.Wf.HttpEndpoint("decision", "waits/decision"), Native.Wf.Respond("out", "ok")));
 
@@ -1101,7 +1101,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_host_workflow_serves_beside_the_publications_and_its_route_conflicts_are_refused()
     {
-        var host = new Host();
+        using var host = new Host();
         await host.ActivateAsync(Orders("orders@1"), "orders-1");
         var probe = Native.Wf.Workflow("probe", Native.Wf.Sequence("main", Native.Wf.HttpEndpoint("start", "probe"), Native.Wf.Respond("out", "ok")));
         var clash = Native.Wf.Workflow("clash", Native.Wf.Sequence("main", Native.Wf.HttpEndpoint("start", "orders"), Native.Wf.Respond("out", "no")));

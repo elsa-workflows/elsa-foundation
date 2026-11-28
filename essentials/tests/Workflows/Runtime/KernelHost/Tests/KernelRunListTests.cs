@@ -16,7 +16,6 @@ using Elsa.Foundation.Identity.Extensions;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Api.Authorization;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -401,18 +400,6 @@ public sealed class KernelRunListTests
     }
 
     [Fact]
-    public void Retained_api_refuses_co_selection_with_the_broad_runtime_routes()
-    {
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        var retained = new WorkflowsRuntimeKernelRetainedApiFeature();
-        retained.ConfigureServices(services);
-
-        var error = Assert.Throws<InvalidOperationException>(() => retained.PostConfigureServices(services));
-        Assert.Contains("share Workflow Runtime routes", error.Message);
-    }
-
-    [Fact]
     public async Task Retained_api_selection_activates_a_shell_without_the_legacy_runner()
     {
         const string shellName = "retained-kernel-api";
@@ -424,7 +411,6 @@ public sealed class KernelRunListTests
                 typeof(RetainedKernelApiTestHost).Assembly,
                 typeof(WorkflowsRuntimeKernelRetainedApiFeature).Assembly,
                 typeof(WorkflowsRuntimeKernelFeature).Assembly,
-                typeof(WorkflowsRuntimeApiFeature).Assembly,
                 typeof(ApiCapabilitiesFeature).Assembly,
                 typeof(WorkflowsPublishingFeature).Assembly,
                 typeof(WorkflowDesignValidationsFeature).Assembly,

@@ -431,7 +431,7 @@ public sealed partial class KernelStandalonePreparedStartTests
                 services.AddSingleton<IWellKnownTypeRegistry, KernelPublishedExecuteTests.FixtureTypes>();
                 services.AddSingleton<IPortableExpressionEvaluator>(expressions);
                 new EventsFeature().ConfigureServices(services);
-                services.AddWorkflowActivationDefaults();
+                WorkflowPublicationDefaults.Add(services);
                 new RuntimeArtifactsEntityFrameworkCoreFeature
                 {
                     Provider = provider, ConnectionString = runtime, RecoveryContinuationSigningKey = new string('r', 32)
