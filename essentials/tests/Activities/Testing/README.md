@@ -58,7 +58,7 @@ authored Flowcharts on SQLite and PostgreSQL.
 The pinned Behavioral suite drives the previous engine and records its declared
 outcomes, outputs and missing-input failures. It includes the complete classic
 DispatchWorkflow outcome matrix, including cancellation and terminal delivery failure.
-The classic BPMN gateway-loop occurrence case uses the same archive.
+The classic BPMN gateway-loop and mixed HTTP/Cron Flowchart trigger cases use this archive.
 
 ```sh
 dotnet test essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj \
@@ -66,9 +66,11 @@ dotnet test essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavio
   --filter 'FullyQualifiedName~ActivityOutcomeReachabilityTests|FullyQualifiedName~ActivityOutputPopulationTests|FullyQualifiedName~RequiredInputEnforcementTests|FullyQualifiedName~ActivityDriveHealthTests'
 dotnet test essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj \
   -c Release -p:RestoreLockedMode=true \
-  --filter 'FullyQualifiedName~A_reader_beside_its_producer_in_a_sequence_on_a_bpmn_gateway_loop'
+  --filter 'FullyQualifiedName~A_reader_beside_its_producer_in_a_sequence_on_a_bpmn_gateway_loop|FullyQualifiedName~FlowchartTriggerStartBehaviorTests'
 ```
 
 Current Behavioral tests keep the separate Graph execution, member-read and
 activity contract checks. Supported Actor workflow execution is exercised by the
-Native and Kernel Host suites.
+Native and Kernel Host suites. They exercise entry selection from a triggered
+Flowchart, multiple authored HTTP entry registrations and exact scheduled trigger
+identity.
