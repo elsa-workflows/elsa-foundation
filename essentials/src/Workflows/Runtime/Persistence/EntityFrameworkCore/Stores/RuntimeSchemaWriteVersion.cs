@@ -36,6 +36,9 @@ internal static class RuntimeSchemaWriteVersion
         CanWrite(context, RuntimeArtifactEfModule.SchemaFamily, RuntimeArtifactEfModule.ScopedPublicationSchemaVersion) &&
         CanWrite(context, RuntimeOperationalStateEfModule.SchemaFamily, RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion);
 
+    internal static bool SupportsAuthoredEventCohorts(RuntimeDbContext context) =>
+        CanWrite(context, RuntimeAuthoredEventCohortEfModule.SchemaFamily, RuntimeAuthoredEventCohortEfModule.SchemaVersion);
+
     internal static bool SupportsReservationSemantics(RuntimeDbContext context) => FindGate(context) is { } gate &&
         gate.StateOf(StandaloneTriggersEfModule.SchemaFamily) is not null && gate.StateOf(RuntimeTriggerBindingEfModule.SchemaFamily) is not null &&
         CanWrite(context, StandaloneTriggersEfModule.SchemaFamily, StandaloneTriggersEfModule.SemanticReservationsSchemaVersion) &&

@@ -91,9 +91,9 @@ public sealed partial class KernelStandalonePreparedStartTests
 
         await using (var host = OpenHost(lostObservation: true))
         {
+            await EnablePreparedRuntimeSchemaAsync(host, token);
             await using var operation = await host.Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(Persistence);
             var services = operation.ServiceProvider;
-            await services.GetRequiredService<RuntimeDbContext>().Database.MigrateAsync(token);
             var publication = await PublishAsync(services, executable, 0, clock.GetUtcNow(), token);
             await WriteTriggerAsync(services, EventId, "event", new { name = EventId });
             await WriteTriggerAsync(services, TimerId, "timer", new { interval = "PT1H" });
@@ -144,6 +144,7 @@ public sealed partial class KernelStandalonePreparedStartTests
         clock.Advance(TimeSpan.FromMinutes(2));
         await using (var host = OpenHost(lostObservation: false))
         {
+            await EnablePreparedRuntimeSchemaAsync(host, token);
             var shell = host.Services.GetRequiredService<KernelShellRuntime>();
             await shell.StartAsync(token);
             try
