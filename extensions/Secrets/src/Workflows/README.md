@@ -1,6 +1,6 @@
 # Elsa.Secrets.Workflows
 
-The workflow runtime adapter for the Secrets module. Feature `SecretsWorkflows` resolves an activity input bound to a
+The workflow runtime adapter for the Secrets module resolves an activity input bound to a
 `Secret` reference through the Secrets module's `ISecretValueResolver`, each time the activity is activated, for the
 tenant the runtime hands over: the execution partition read at activation. On the background drain path that is the
 host's persistence scope, so the two-tenant scenario is proven with one host per tenant over one secret store; a drain
@@ -14,6 +14,9 @@ which registers `SecretValueRuntimeResolver` as the container's `IRuntimeSecretR
 `ISecretValueResolver` it reads through. It registers nothing else: no event handler, no task and no other runtime
 contract.
 
+`ActorSecretsWorkflows` registers the same resolver and depends on `Secrets` and `ActivitiesRuntimeHosting`. Stock
+Workbench and its Compose reference shell select this feature. The explicit classic configuration uses `SecretsWorkflows`.
+
 `IRuntimeSecretResolver` is a replacement contract with at most one implementation per container, and the runtime
 registers none. `AddSecretsWorkflows` refuses to register beside another one, as an early diagnostic: when a different
 `IRuntimeSecretResolver` is already registered it throws an `InvalidOperationException` naming both. Calling it again
@@ -22,9 +25,8 @@ registration; the activities runtime's startup check refuses it instead: shell a
 `MultipleRuntimeSecretResolversException`, naming both. A host that supplies its own resolver composes it instead of
 `SecretsWorkflows`, not beside it.
 
-A shell without `SecretsWorkflows` cannot resolve secrets at all: a secret-bound activity waits with an
-activation-failure incident (`MissingSecretResolver`) until the feature is composed, instead of faulting. The Workbench
-enables it in `shells.json`, `shells.baseline.json` and the compose shells file.
+In a classic shell without a resolver, a secret-bound activity waits with an activation-failure incident
+(`MissingSecretResolver`) until the resolver is composed.
 
 ## What a resolution does
 

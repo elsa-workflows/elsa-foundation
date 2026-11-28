@@ -15,8 +15,8 @@
           "ActivitiesDesignReconciliation": {},
           "ActivitiesFlowchart": {},
           "ActivitiesPrimitives": {},
-          "ActivitiesGraphRuntime": {},
-          "ActivitiesRuntime": {},
+          "ActivitiesGraphRuntimeHosting": {},
+          "ActivitiesRuntimeHosting": {},
           "ActivitiesSequence": {},
           "ApiCapabilities": {},
           "ClrActivityReconciliation": {
@@ -152,7 +152,7 @@
             "EncryptionKey": "development-demo-only-secrets-encryption-key"
           },
           "SecretsApi": {},
-          "SecretsWorkflows": {},
+          "ActorSecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {},
           "AgentDesign": {},
           "AgentApi": {},
