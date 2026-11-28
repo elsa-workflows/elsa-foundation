@@ -52,7 +52,7 @@
     <ProjectReference Include="..\..\..\..\..\..\extensions\Http\src\Activities\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />

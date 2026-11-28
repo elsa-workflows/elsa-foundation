@@ -42,7 +42,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <!-- Include the real dependency closure of Publishing EF's shell feature for tooling composition tests. -->
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />

@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="../../../../../../extensions/Http/src/Workflows/Runtime/Elsa.Workflows.Runtime.Http.csproj" />
     <!-- Retained only for the historical FastEndpoints oracle and coexistence canary. Production Runtime API no longer references it. -->
     <ProjectReference Include="..\..\..\..\..\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />

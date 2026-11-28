@@ -2,7 +2,7 @@
 
 `Elsa.Workflows.Runtime.Api` owns supported management-client operations over runtime state: immutable workflow executables, read-only executable provenance, workflow execution and instance inspection, detached dispatch inspection, stimulus dispatch, and runtime diagnostics settings. Design authoring and publication/source-reference mutation belong to their own domains.
 
-See the [domain-owned API specification](../../../../../specs/220-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../docs/glossary/elsa.md) for the lifecycle and ownership model.
+See the [domain-owned API specification](../../../../../../specs/220-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../../docs/glossary/elsa.md) for the lifecycle and ownership model.
 
 ## Composition
 
@@ -58,7 +58,7 @@ The list response also exposes the shell's declared `channels` (name, display na
 `allowAdHocChannels`, including when `items` is empty. A slot's optional `channel` carries its matching declaration.
 Declarations are global to the shell; the slot identity remains `(definitionId, slotName)`. Clients can therefore
 offer channels before the first publication without presenting a per-definition slot as a global entity.
-See [channel configuration](../Elsa.Workflows.Runtime/README.md#activation-channels).
+See [channel configuration](../../Elsa.Workflows.Runtime/README.md#activation-channels).
 
 ## Withheld and protected values
 
@@ -115,9 +115,9 @@ handler CLR identities.
 
 ## Extension points
 
-Standalone trigger management is separately composed through `StandaloneTriggersApi`; enabling `WorkflowsRuntimeApi` alone does not map those endpoints. Its [feature README](StandaloneTriggers/README.md) documents discovery, routes, request shapes and composition; the [operator guide](../../../../../docs/standalone-triggers.md) owns practical examples and current qualification limits.
+Standalone trigger management is separately composed through `StandaloneTriggersApi`; enabling `WorkflowsRuntimeApi` alone does not map those endpoints. Its [feature README](StandaloneTriggers/README.md) documents discovery, routes, request shapes and composition; the [operator guide](../../../../../../docs/standalone-triggers.md) owns practical examples and current qualification limits.
 
-See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for the API-facing stores and inspector seam, and the [Runtime domain catalog](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the full engine and persistence surface.
+See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for the API-facing stores and inspector seam, and the [Runtime domain catalog](../../Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the full engine and persistence surface.
 
 ## Incident health
 
